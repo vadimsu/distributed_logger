@@ -99,7 +99,9 @@ with open(sys.argv[1]) as fp:
     goCodeGen = code_gen.GoCodeGen(functs)()
     with open("LogAPIs.hh","w") as hfp:
         hfp.write(cppCodeGen.get_declarations_code())
+    print(cppCodeGen.get_storage_enum_code())
     print(cppCodeGen.get_declarations_code())
+    print(goCodeGen.get_storage_enum_code())
     print(goCodeGen.get_storage_declarations_code())
     print(goCodeGen.get_storage_definitions_code())
     print(goCodeGen.get_storage_structures_code())
