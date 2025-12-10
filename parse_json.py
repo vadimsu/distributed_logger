@@ -104,6 +104,17 @@ with open(sys.argv[1]) as fp:
     print(goCodeGen.get_storage_enum_code())
     print(goCodeGen.get_storage_declarations_code())
     print(goCodeGen.get_storage_definitions_code())
-    print(goCodeGen.get_storage_structures_code())
+#    print(goCodeGen.get_storage_structures_code())
     print(goCodeGen.get_decoder_code())
+    with open("server/storage/storage.go", "w") as storage_fp:
+#        storage_fp.write(goCodeGen.get_storage_structures_code())
+        storage_fp.write(goCodeGen.get_storage_enum_code())
+        storage_fp.write(goCodeGen.get_storage_declarations_code())
+    with open("server/storage/mongo/mongo_storage.go", "w") as storage_fp:
+        storage_fp.write(goCodeGen.get_storage_definitions_code())
+    with open("client/distributed_logger_api_int.hh", "w") as storage_fp:
+        storage_fp.write(cppCodeGen.get_storage_enum_code())
+        storage_fp.write(cppCodeGen.get_declarations_code())
+    with open("server/decoder/event_decoder.go", "w") as storage_fp:
+        storage_fp.write(goCodeGen.get_decoder_code())
 #    print(str(cppCodeGen()))
