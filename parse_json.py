@@ -105,4 +105,5 @@ with open(sys.argv[1]) as fp:
     print(goCodeGen.get_storage_declarations_code())
     print(goCodeGen.get_storage_definitions_code())
     print(goCodeGen.get_storage_structures_code())
+    print(goCodeGen.get_decoder_code())
 #    print(str(cppCodeGen()))
