@@ -19,49 +19,65 @@ class GoCodeGen(CodeGen):
     def generate_code(self):
         self._storage_enum_code = "package storage\nconst (\n"
         self._decoder_code = "package decoder\n"
-        self._storage_definitions_code = "package storage\n"
+        self._decoder_code = self._decoder_code + "import (\n\t\"distributedlogger.com/storage\"\n\"errors\"\n)\n"
+        self._storage_definitions_code = ""
+#        self._storage_definitions_code = "package mongo\n"
+#        self._storage_definitions_code = self._storage_definitions_code + "import (\n\"context\"\n"
+##        self._storage_definitions_code = self._storage_definitions_code + "\"go.mongodb.org/mongo-driver/v2/bson\"\n"
+#        self._storage_definitions_code = self._storage_definitions_code + "\"go.mongodb.org/mongo-driver/v2/mongo\"\n"
+##        self._storage_definitions_code = self._storage_definitions_code + "\"go.mongodb.org/mongo-driver/v2/mongo/options\"\n"
+
+#        self._storage_definitions_code = self._storage_definitions_code + "\"distributedlogger.com/storage\"\n" 
+#        self._storage_definitions_code = self._storage_definitions_code + ")\n"
+
+
+ #       self._storage_definitions_code = self._storage_definitions_code + "type MongoStorage struct{\ncollection *mongo.Collection\n}\n"
 #       self._storage_structures_code = "package storage\n"
+        self._storage_structures_code = ""
         self._storage_declarations_code = "type StorageAPI interface{\n"
         func_idx = 0
         for f in self._func_dict:
             if len(f['params']) < 2:
                 continue
-            decoder_func = "func decode_" + GoCodeGen.get_event_name(f['params'][0]) + "(packet []byte, s *StorageAPI) {\n"
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            decoder_func = "func decode_" + event_name + "(packet []byte, s storage.StorageAPI)(error) {\n"
             decoder_func = decoder_func + "\tvar decoded int = 0\n"
-            funct = '\t' + f['name'] + "_" + GoCodeGen.get_event_name(f['params'][0]) + "("
-#            storage_struct = "type " + f['name'] + "_" + GoCodeGen.get_event_name(f['params'][1]) + " struct {\n"
+            decoder_func = decoder_func + "\tvar decodedThisTime int = 0\n"
+            funct = '\t' + f['name'] + "_" + event_name + "("
+            storage_struct = "type " + event_name[0].upper() + event_name[1:] + "_struct struct {\n"
             self._storage_definitions_code = self._storage_definitions_code + "func (s *MongoStorage) " + funct
-            self._storage_enum_code = self._storage_enum_code + '\t' + GoCodeGen.get_event_name(f['params'][0])
+            self._storage_enum_code = self._storage_enum_code + '\t' + event_name[0].upper() + event_name[1:]
             if func_idx == 0:
-                self._storage_enum_code + " = iota"
+                self._storage_enum_code = self._storage_enum_code + " = iota"
+            self._storage_enum_code = self._storage_enum_code + '\n'
             func_idx = func_idx + 1
             if func_idx == len(self._func_dict):
                 self._storage_enum_code = self._storage_enum_code + '\n' + ")\n"
-            else:
-                self._storage_enum_code = self._storage_enum_code + ",\n"
             params = f['params']
             param_idx = 0
-            funct_body = "\tfields := []interface{}{\n" + '\t\t' + GoCodeGen.get_event_name(f['params'][0]) +"_struct{\n"
+            funct_body = "\tfields := []interface{}{\n" + '\t\t' + "storage." + event_name[0].upper() + event_name[1:] +"_struct{\n"
             params_array = []
             for p in params:
-                funct = funct + p[0] + " " + p[1]
-                self._storage_definitions_code = self._storage_definitions_code + p[0] + " " + p[1]
- #               storage_struct = storage_struct + '\t' + p[0] + " " + p[1] + '\n'
-                funct_body = funct_body + '\t\t\t' + p[0] + ":" + p[0]
+                param_type = p[1]
+                if param_type == "uint64_t":
+                        param_type = "uint64"
+                funct = funct + p[0] + " " + param_type
+                self._storage_definitions_code = self._storage_definitions_code + p[0] + " " + param_type
+                storage_struct = storage_struct + '\t' + p[0][0].upper() + p[0][1:] + " " + param_type + '\n'
+                funct_body = funct_body + '\t\t\t' + p[0][0].upper() + p[0][1:] + ":" + p[0]
                 param_idx = param_idx + 1
                 if param_idx < len(params):
                     funct = funct + ", "
-                    funct_body = funct_body + ","
                     self._storage_definitions_code = self._storage_definitions_code + ","
-                funct_body = funct_body +'\n'
-                decoder_func = decoder_func + "\tvar " + p[0] + " " + p[1] + '\n'
+                funct_body = funct_body + ",\n"
+                decoder_func = decoder_func + "\tvar " + p[0] + " " + param_type + '\n'
                 if p[1] == "string":
-                    decoder_func = decoder_func + '\t' + p[0] + ", decodedThisTime = decodeString(packet[decoded:])" + '\n'
+                    decoder_func = decoder_func + '\t' + p[0] + ", decodedThisTime,_ = DecodeString(packet[decoded:],false)" + '\n'
                 else:
-                    decoder_func = decoder_func + '\t' + p[0] + ", decodedThisTime = decodeUint64(packet[decoded:])" + '\n'
-                decoder_func = decoder_func + "\tdecoded = decode + decodedThisTime\n"
+                    decoder_func = decoder_func + '\t' + p[0] + ", decodedThisTime,_ = DecodeUint64(packet[decoded:])" + '\n'
+                decoder_func = decoder_func + "\tdecoded = decoded + decodedThisTime\n"
 
-            decoder_func = decoder_func + '\t' + "s." + f['name'] + "_" + GoCodeGen.get_event_name(f['params'][0]) + "("
+            decoder_func = decoder_func + '\t' + "return s." + f['name'] + "_" + event_name + "("
             param_idx = 0
             for p in params:
                 param_idx = param_idx + 1
@@ -81,18 +97,19 @@ class GoCodeGen(CodeGen):
             self._storage_definitions_code = self._storage_definitions_code + ") (error){\n"
             self._storage_definitions_code = self._storage_definitions_code + funct_body
             self._storage_definitions_code = self._storage_definitions_code + "\n}\n"
-  #          storage_struct = storage_struct + "}\n"
-#            self._storage_structures_code = self._storage_structures_code + storage_struct
+            storage_struct = storage_struct + "}\n"
+            self._storage_structures_code = self._storage_structures_code + storage_struct
             self._storage_declarations_code = self._storage_declarations_code + funct
             if func_idx == len(self._func_dict):
                 self._storage_declarations_code = self._storage_declarations_code + '\n'
         self._storage_declarations_code = self._storage_declarations_code + "}\n"
-        dispatch_funct  = "func event_dispatch(event uint64, packet []byte, s *StorageAPI)(error){\n"
+        dispatch_funct  = "func Event_dispatch(event uint64, packet []byte, s storage.StorageAPI)(error){\n"
         dispatch_funct = dispatch_funct + "\tswitch event{\n"
         for f in self._func_dict:
             if len(f['params']) < 2:
                 continue
-            dispatch_funct = dispatch_funct + "\tcase " + GoCodeGen.get_event_name(f['params'][0]) + ":\n"
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            dispatch_funct = dispatch_funct + "\tcase storage." + event_name[0].upper() + event_name[1:] + ":\n"
             dispatch_funct = dispatch_funct + "\t\treturn decode_" + GoCodeGen.get_event_name(f['params'][0]) + "(packet, s)\n"
         dispatch_funct = dispatch_funct + "\t}\n"
         dispatch_funct = dispatch_funct + "\treturn errors.New(\"unknown event\")\n}"
@@ -101,8 +118,8 @@ class GoCodeGen(CodeGen):
         return self._storage_declarations_code
     def get_storage_definitions_code(self):
         return self._storage_definitions_code
-#    def get_storage_structures_code(self):
-#        return self._storage_structures_code
+    def get_storage_structures_code(self):
+        return self._storage_structures_code
     def get_storage_enum_code(self):
         return self._storage_enum_code
     def get_decoder_code(self):

@@ -1,13 +1,14 @@
+package decoder
 
 import (
 	"errors"
 	"encoding/binary"
 	"bytes"
 	"fmt"
-	"event_decoders"
+//	"distributedlogger.com/event_decoders"
 )
 
-func decodeUint16(packet []byte) (uint16, int, error){
+func DecodeUint16(packet []byte) (uint16, int, error){
         var value uint16
         value = 0
         if len(packet) < 2{
@@ -21,7 +22,7 @@ func decodeUint16(packet []byte) (uint16, int, error){
         return value, 2, nil
 }
 
-func decodeUint64(packet []byte) (uint64, int, error){
+func DecodeUint64(packet []byte) (uint64, int, error){
         var value uint64
         value = 0
         if len(packet) < 8{
@@ -35,11 +36,11 @@ func decodeUint64(packet []byte) (uint64, int, error){
         return value, 8, nil
 }
 
-func decodeString(packet []byte, skipType bool) (string, int, error){
+func DecodeString(packet []byte, skipType bool) (string, int, error){
         var value string
         decoded := 0
         if skipType == false{
-                stringType, decodedThisTime, err := decodeUint16(packet)
+                stringType, decodedThisTime, err := DecodeUint16(packet)
                 if err != nil{
                         fmt.Println(err)
                         return "", 0, errors.New("cannot decode stringType")
@@ -53,7 +54,7 @@ func decodeString(packet []byte, skipType bool) (string, int, error){
         if len(packet) <= decoded{
                 return "",0,errors.New("not enough bytes to decode string length")
         }
-        stringLength, decodedThisTime, err := decodeUint16(packet[decoded:])
+        stringLength, decodedThisTime, err := DecodeUint16(packet[decoded:])
         if err != nil{
                 fmt.Println(err)
                 return "", 0, errors.New("cannot decode string length")

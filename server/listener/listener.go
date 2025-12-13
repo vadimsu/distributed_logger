@@ -1,3 +1,4 @@
+package listener
 
 import (
 	"encoding/json"
@@ -8,13 +9,14 @@ import (
 	"strconv"
 	"net"
 	"bytes"
-	"errors"
 	"distributedlogger.com/storage"
+	"distributedlogger.com/decoder"
+	"distributedlogger.com/config"
 	"crypto/tls"
 	"crypto/x509"
 )
 
-func handleConnection(conn net.Conn, storageAPI *StorageAPI){
+func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
         var readBuf []byte
         var headerBuf []byte
         var packetLength uint32
@@ -49,9 +51,9 @@ func handleConnection(conn net.Conn, storageAPI *StorageAPI){
                                 alreadyRead = alreadyRead + numOfBytes
                                 if alreadyRead == int(packetLength){
                                         if len(readBuf) > 12 {
-						event, decodedThisTime, err := decoder.decodeUint64(readBuf[12:])
+						event, decodedThisTime, err := decoder.DecodeUint64(readBuf[12:])
 						if err == nil {
-							decoder.event_dispatch(event, readBuf[12+decodedThisTime:], storageApi)
+							decoder.Event_dispatch(event, readBuf[12+decodedThisTime:], storageAPI)
 						}
                                         }else{
                                                 fmt.Println("unexpectedly short packet ",len(readBuf))
@@ -65,7 +67,7 @@ func handleConnection(conn net.Conn, storageAPI *StorageAPI){
         defer conn.Close()
 }
 
-func LaunchListener(confPath string, storageAPI *StorageAPI){
+func LaunchListener(confPath string, storageAPI storage.StorageAPI){
         jsonFile, err := os.Open(confPath)
         if err != nil{
                 fmt.Println(err)
@@ -73,7 +75,7 @@ func LaunchListener(confPath string, storageAPI *StorageAPI){
         }else{
                 fmt.Println("opened")
         }
-        var config Config
+        var config config.Config
         var ln net.Listener
         byteValue, _ := ioutil.ReadAll(jsonFile)
         json.Unmarshal(byteValue,&config)
