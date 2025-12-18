@@ -1,0 +1,9 @@
+{
+	"StorageType":"mongo",
+        "Username":"eventdemo",
+        "Password":"eventdemo",
+        "Host":"127.0.0.1",
+        "Port":"27017",
+        "Dbname":"eventdemo",
+        "DataRetentionPeriod":"3"
+}

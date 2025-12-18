@@ -134,7 +134,7 @@ class CppCodeGen(CodeGen):
         self._storage_enum_code = "typedef enum {\n"
         func_idx = 0
         for f in self._func_dict:
-            funct = f['return'] + ' ' + f['name'] + "("
+            funct = 'inline\n' + f['return'] + ' ' + f['name'] + "("
             total_length_str = "\tint total_length = 4;" + '\n'
             params = f['params']
             self._storage_enum_code = self._storage_enum_code + '\t' + GoCodeGen.get_event_name(f['params'][0])

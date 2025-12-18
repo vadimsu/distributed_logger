@@ -97,8 +97,6 @@ with open(sys.argv[1]) as fp:
             print(exc)
     cppCodeGen = code_gen.CppCodeGen(functs)()
     goCodeGen = code_gen.GoCodeGen(functs)()
-    with open("LogAPIs.hh","w") as hfp:
-        hfp.write(cppCodeGen.get_declarations_code())
     print(cppCodeGen.get_storage_enum_code())
     print(cppCodeGen.get_declarations_code())
     print(goCodeGen.get_storage_enum_code())
@@ -115,7 +113,7 @@ with open(sys.argv[1]) as fp:
             mongo_init = mongo_init_fp.read()
             storage_fp.write(mongo_init + goCodeGen.get_storage_definitions_code())
 #        storage_fp.write(goCodeGen.get_storage_definitions_code())
-    with open("client/distributed_logger_api_int.hh", "w") as storage_fp:
+    with open("client/internal/distributed_logger_api_int.hh", "w") as storage_fp:
         storage_fp.write(cppCodeGen.get_storage_enum_code())
         storage_fp.write(cppCodeGen.get_declarations_code())
     with open("server/decoder/event_decoder.go", "w") as storage_fp:
