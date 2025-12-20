@@ -146,11 +146,12 @@ EventIIOPosix::~EventIIOPosix(){
 
 std::shared_ptr<IBufferWrapper> EventIIOPosix::Send(std::shared_ptr<IBufferWrapper> buf){
         uint32_t length = buf->getCapacity() - 4;
+	std::cout<<"Sending "<<buf->getCapacity()<<std::endl;
         length = htonl(length);
         memcpy(buf->getData(), &length, sizeof(length));
-        length = buf->getCapacity() - 10;
-        length = htonl(length);
-        memcpy(buf->getData() + 6, &length, sizeof(length));
+//        length = buf->getCapacity() - 10;
+//        length = htonl(length);
+//        memcpy(buf->getData() + 6, &length, sizeof(length));
         if (!_queue.empty()){
                 _queue.push_back(buf);
                 return nullptr;

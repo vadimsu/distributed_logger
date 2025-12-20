@@ -1,13 +1,15 @@
 #include "EventBufferPosix.hh"
 #include <cstring>
 #include <stdlib.h>
+#include <iostream>
 
 using namespace DistributedLogger;
 
 EventBufferPosix::EventBufferPosix(size_t size){
         _readOffset = 0;
-        _writeOffset = 10;//to comply with the protocol where first 6 bytes are 2 for type and 4 for length
-        _size = size + 10;
+        _writeOffset = 0;
+	_size = size;
+	std::cout<<"allocating buf "<<size<<std::endl;
         _buffer = (char*)calloc(1,_size);
 }
 
@@ -33,9 +35,10 @@ size_t EventBufferPosix::getCapacity(){
 }
 
 size_t EventBufferPosix::writeData(const char* data, size_t size){
-        if (_size <= size + _writeOffset){
-                size = _size - _writeOffset;
-        }
+	if (_size <= size + _writeOffset){
+		size = _size - _writeOffset;
+	}
+	std::cout<<"writing  "<<size<<" at "<<_writeOffset<<std::endl;
         memcpy(_buffer + _writeOffset, data, size);
         _writeOffset += size;
         return size;

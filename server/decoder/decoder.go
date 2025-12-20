@@ -33,6 +33,7 @@ func DecodeUint64(packet []byte) (uint64, int, error){
         if err != nil{
                 return 0, 0, err
         }
+	fmt.Println("decoded uint64 ",value)
         return value, 8, nil
 }
 
@@ -45,7 +46,7 @@ func DecodeString(packet []byte, skipType bool) (string, int, error){
                         fmt.Println(err)
                         return "", 0, errors.New("cannot decode stringType")
                 }
-                if stringType != 1{
+                if stringType != 2{
                         fmt.Println("stringType ",stringType," expected 1")
                         return "", 0, errors.New("stringType mismatch")
                 }
@@ -66,6 +67,7 @@ func DecodeString(packet []byte, skipType bool) (string, int, error){
                 return "", 0, errors.New("not enough bytes to decode string")
         }
         value = string(packet[decoded:decoded+int(stringLength)])
+	fmt.Println("decoded string ",value)
         return value, decoded + int(stringLength), nil
 }
 

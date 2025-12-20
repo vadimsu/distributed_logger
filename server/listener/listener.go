@@ -50,14 +50,17 @@ func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
                                 }
                                 alreadyRead = alreadyRead + numOfBytes
                                 if alreadyRead == int(packetLength){
-                                        if len(readBuf) > 12 {
-						event, decodedThisTime, err := decoder.DecodeUint64(readBuf[12:])
+//                                        if len(readBuf) > 12 {
+						event, decodedThisTime, err := decoder.DecodeUint64(readBuf)
 						if err == nil {
-							decoder.Event_dispatch(event, readBuf[12+decodedThisTime:], storageAPI)
+							fmt.Println("decoding event ",event)
+							decoder.Event_dispatch(event, readBuf[decodedThisTime:], storageAPI)
+						}else{
+							fmt.Println("error in decoding ",err)
 						}
-                                        }else{
-                                                fmt.Println("unexpectedly short packet ",len(readBuf))
-                                        }
+  //                                      }else{
+    //                                            fmt.Println("unexpectedly short packet ",len(readBuf))
+      //                                  }
                                         packetLength = 0
                                         alreadyRead = 0
                                 }

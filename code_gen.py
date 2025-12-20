@@ -71,11 +71,14 @@ class GoCodeGen(CodeGen):
                     self._storage_definitions_code = self._storage_definitions_code + ","
                 funct_body = funct_body + ",\n"
                 decoder_func = decoder_func + "\tvar " + p[0] + " " + param_type + '\n'
-                if p[1] == "string":
-                    decoder_func = decoder_func + '\t' + p[0] + ", decodedThisTime,_ = DecodeString(packet[decoded:],false)" + '\n'
+                if param_idx > 1:
+                    if p[1] == "string":
+                        decoder_func = decoder_func + '\t' + p[0] + ", decodedThisTime,_ = DecodeString(packet[decoded:],false)" + '\n'
+                    else:
+                        decoder_func = decoder_func + '\t' + p[0] + ", decodedThisTime,_ = DecodeUint64(packet[decoded:])" + '\n'
+                    decoder_func = decoder_func + "\tdecoded = decoded + decodedThisTime\n"
                 else:
-                    decoder_func = decoder_func + '\t' + p[0] + ", decodedThisTime,_ = DecodeUint64(packet[decoded:])" + '\n'
-                decoder_func = decoder_func + "\tdecoded = decoded + decodedThisTime\n"
+                        decoder_func = decoder_func + "\t" + p[0] + " = storage." + p[0][0].upper() + p[0][1:] + "\n"
 
             decoder_func = decoder_func + '\t' + "return s." + f['name'] + "_" + event_name + "("
             param_idx = 0
@@ -152,12 +155,13 @@ class CppCodeGen(CodeGen):
                 if p[1] == "string":
                     total_length_str = total_length_str + "\ttotal_length + " + p[0]+".size() + 4;\n"
                 elif p[1] == "uint64_t":
-                    total_length_str = total_length_str + "\ttotal_length + 12;\n"
+                    total_length_str = total_length_str + "\ttotal_length + 8;\n"
                 if param_idx < len(params):
                     funct = funct + ", "
             funct = funct + ") {\n"
             funct = funct + total_length_str + "\n"
             funct = funct + "\tstd::shared_ptr<Buffer> buffer = std::make_shared<Buffer>(total_length);\n"
+            funct = funct + "\tbuffer->setWriteOffset(4);\n"
             param_idx = 0
             for p in params:
                 funct = funct + "\tencode(buffer," + p[0] + ");"
