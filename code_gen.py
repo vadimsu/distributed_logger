@@ -153,9 +153,9 @@ class CppCodeGen(CodeGen):
                 funct = funct + p[1] + " " + p[0]
                 param_idx = param_idx + 1
                 if p[1] == "string":
-                    total_length_str = total_length_str + "\ttotal_length + " + p[0]+".size() + 4;\n"
+                    total_length_str = total_length_str + "\ttotal_length += " + p[0]+".size() + 4;\n"
                 elif p[1] == "uint64_t":
-                    total_length_str = total_length_str + "\ttotal_length + 8;\n"
+                    total_length_str = total_length_str + "\ttotal_length += 8;\n"
                 if param_idx < len(params):
                     funct = funct + ", "
             funct = funct + ") {\n"
