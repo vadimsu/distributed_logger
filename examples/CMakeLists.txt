@@ -24,12 +24,29 @@ add_executable (
 	../client/posix_buffer/EventBufferPosix.cc
 )
 
+add_executable (
+        async_logging
+        async_logging.cc
+	../client/posix_iio/EventIIOPosix.cc
+	../client/posix_buffer/EventBufferPosix.cc
+)
+
 target_link_libraries (
 	simple_logging
 	crypto
 	ssl
 )
 
+target_link_libraries (
+	async_logging
+	crypto
+	ssl
+)
+
 set_target_properties(simple_logging
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+set_target_properties(async_logging
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

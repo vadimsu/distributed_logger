@@ -133,7 +133,7 @@ void EventIIOPosix::initialize_connection(){
         syslog(LOG_INFO,"Connected to centralized logging %s",_remoteHost.c_str());
 }
 
-EventIIOPosix::EventIIOPosix(std::string remoteHost, uint16_t port, std::string&& certificate, std::string&& key, std::string&& trusted): _remoteHost(remoteHost), _port(port), _cert(certificate), _key(key), _trusted(trusted), _fd(-1), _ssl(NULL), _connected(false){
+EventIIOPosix::EventIIOPosix(std::string remoteHost, uint16_t port, std::string&& certificate, std::string&& key, std::string&& trusted): _remoteHost(remoteHost), _port(port), _cert(certificate), _key(key), _trusted(trusted), _fd(-1), _ssl(NULL), _connected(false), _asyncMode(false){
         initialize_connection();
 }
 
@@ -149,6 +149,10 @@ std::shared_ptr<IBufferWrapper> EventIIOPosix::Send(std::shared_ptr<IBufferWrapp
 	std::cout<<"Sending "<<buf->getCapacity()<<std::endl;
         length = htonl(length);
         memcpy(buf->getData(), &length, sizeof(length));
+	if (_asyncMode){
+		_queue.push_back(buf);
+		return nullptr;
+	}
 //        length = buf->getCapacity() - 10;
 //        length = htonl(length);
 //        memcpy(buf->getData() + 6, &length, sizeof(length));
@@ -179,7 +183,7 @@ std::shared_ptr<IBufferWrapper> EventIIOPosix::Send(std::shared_ptr<IBufferWrapp
         return nullptr;
 }
 
-void EventIIOPosix::OnPeriodic(){
+void EventIIOPosix::OnWriteOpportunity(){
         while (!_queue.empty()){
 //repeat:
                 auto buf = _queue.front();
@@ -191,16 +195,17 @@ void EventIIOPosix::OnPeriodic(){
 		}
                 if (written > 0){
                         buf->setReadOffset(buf->getReadOffset() + written);
-                }else{
+                }else if (written == -1){
                         if (errno != 0){
                                 initialize_connection();
                                 syslog(LOG_ERR,"Cannot send log message %d %s",written,strerror(errno));
                         }
-//                      goto repeat;
+			break;
                 }
                 if (buf->getReadOffset() == buf->getCapacity()){
                         _queue.pop_front();
                 }else{
+			break;
                 }
         }
 }

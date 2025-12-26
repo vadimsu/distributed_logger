@@ -23,10 +23,12 @@ class EventIIOPosix: public IIO{
                 EventIIOPosix(std::string remoteHost, uint16_t port, std::string&& certificate, std::string&& key, std::string&& trusted);
                 ~EventIIOPosix();
                 std::shared_ptr<IBufferWrapper> Send(std::shared_ptr<IBufferWrapper>) override;
-                void OnPeriodic();
+                void OnWriteOpportunity();
 		int getFd(){ return _fd; }
 		bool isConnected() { return _connected; }
 		bool isQueueEmpty() { return _queue.empty(); }
+		void setAsyncMode(bool mode) { _asyncMode = mode; }
+		bool getAsyncMode(){ return _asyncMode; }
         private:
                 void initialize_connection();
                 std::string _remoteHost;
@@ -38,6 +40,7 @@ class EventIIOPosix: public IIO{
                 SSL *_ssl;
                 std::list<std::shared_ptr<IBufferWrapper>> _queue;
 		bool _connected;
+		bool _asyncMode;
 };
 
 }
