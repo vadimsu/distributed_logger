@@ -13,6 +13,8 @@ include_directories(
 	../../client/internal
 	../../client/posix_iio
 	../../client/posix_buffer
+	../../client/seastar_iio
+	../../client/seastar_buffer
 )
 link_directories(
 )
@@ -22,8 +24,8 @@ find_package (Seastar REQUIRED)
 add_executable (
         seastar_app_logging
         seastar_app_logging.cc
-	../../client/posix_iio/EventIIOPosix.cc
-	../../client/posix_buffer/EventBufferPosix.cc
+	../../client/seastar_iio/seastar_iio.cc
+	../../client/seastar_buffer/seastar_buffer.cc
 )
 
 target_link_libraries (
