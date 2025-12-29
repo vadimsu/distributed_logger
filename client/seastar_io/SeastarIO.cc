@@ -4,19 +4,19 @@
 #include <seastar/core/sstring.hh>
 #include <seastar/net/inet_address.hh>
 #include <seastar/util/log.hh>
-#include "seastar_iio.hh"
-#include "seastar_buffer.hh"
+#include "SeastarIO.hh"
+#include "SeastarBuffer.hh"
 
-using namespace DistributedLogger;
+using namespace distributed_logger;
 
-Seastar_IIO::Seastar_IIO(const seastar::sstring& ip, unsigned int port){
+SeastarIO::SeastarIO(const seastar::sstring& ip, unsigned int port){
 	seastar::net::inet_address in(seastar::sstring(ip.data(), ip.size()));
         _address = seastar::make_ipv4_address({in, port});
 	_connected = false;
 	_transmitting = false;
 }
 
-void Seastar_IIO::reconnect(){
+void SeastarIO::reconnect(){
 	if (_reconnect_timer.armed()){
 		return;
 	}
@@ -45,15 +45,15 @@ void Seastar_IIO::reconnect(){
 	_reconnect_timer.arm(reconnectDuration);
 }
 
-void Seastar_IIO::Connect(){
+void SeastarIO::connect(){
        reconnect();
 }
 
-std::shared_ptr<IBufferWrapper> Seastar_IIO::Send(std::shared_ptr<IBufferWrapper> buffer){
+std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> buffer){
 	uint32_t length = buffer->getCapacity() - 4;
         length = htonl(length);
         memcpy(buffer->getData(), &length, sizeof(length));
-	auto buf = static_pointer_cast<EventBufferSeastar>(buffer);
+	auto buf = static_pointer_cast<SeastarBuffer>(buffer);
 	_wqueue.push_back(std::move(buf->getBuffer()));
 	if (_transmitting || !_connected){
 		return nullptr;

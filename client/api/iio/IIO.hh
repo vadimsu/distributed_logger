@@ -3,12 +3,12 @@
 #include <memory>
 #include "IBuffer.hh"
 
-namespace DistributedLogger {
+namespace distributed_logger {
 
 class IIO{
         public:
                 virtual ~IIO(){}
-                virtual std::shared_ptr<IBufferWrapper> Send(std::shared_ptr<IBufferWrapper>) = 0;
+                virtual std::shared_ptr<IBufferWrapper> send(std::shared_ptr<IBufferWrapper>) = 0;
 };
 
 }

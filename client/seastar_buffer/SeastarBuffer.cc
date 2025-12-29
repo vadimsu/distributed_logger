@@ -2,21 +2,21 @@
 #include <cstring>
 #include <stdlib.h>
 #include <iostream>
-#include "seastar_buffer.hh"
+#include "SeastarBuffer.hh"
 
-using namespace DistributedLogger;
+using namespace distributed_logger;
 
-EventBufferSeastar::EventBufferSeastar(size_t size){
+SeastarBuffer::SeastarBuffer(size_t size){
         _readOffset = 0;
         _writeOffset = 0;
 	std::cout<<"allocating buf "<<size<<std::endl;
         _buffer = seastar::temporary_buffer<char>(size);
 }
 
-EventBufferSeastar::~EventBufferSeastar(){
+SeastarBuffer::~SeastarBuffer(){
 }
 
-size_t EventBufferSeastar::readData(char* data, size_t size){
+size_t SeastarBuffer::readData(char* data, size_t size){
         if (_buffer.size() <= size + _readOffset){
                 size = _buffer.size() - _readOffset;
         }
@@ -25,15 +25,15 @@ size_t EventBufferSeastar::readData(char* data, size_t size){
         return size;
 }
 
-char *EventBufferSeastar::getData(){
+char *SeastarBuffer::getData(){
         return _buffer.get_write();
 }
 
-size_t EventBufferSeastar::getCapacity(){
+size_t SeastarBuffer::getCapacity(){
         return _buffer.size();
 }
 
-size_t EventBufferSeastar::writeData(const char* data, size_t size){
+size_t SeastarBuffer::writeData(const char* data, size_t size){
 	if (_buffer.size() <= size + _writeOffset){
 		size = _buffer.size() - _writeOffset;
 	}
@@ -43,22 +43,22 @@ size_t EventBufferSeastar::writeData(const char* data, size_t size){
         return size;
 }
 
-size_t EventBufferSeastar::getReadOffset(){
+size_t SeastarBuffer::getReadOffset(){
         return _readOffset;
 }
 
-size_t EventBufferSeastar::getWriteOffset(){
+size_t SeastarBuffer::getWriteOffset(){
         return _writeOffset;
 }
 
-void EventBufferSeastar::setReadOffset(size_t offset){
+void SeastarBuffer::setReadOffset(size_t offset){
         _readOffset = offset;
 }
 
-void EventBufferSeastar::setWriteOffset(size_t offset){
+void SeastarBuffer::setWriteOffset(size_t offset){
         _writeOffset = offset;
 }
 
-seastar::temporary_buffer<char> EventBufferSeastar::getBuffer(){
+seastar::temporary_buffer<char> SeastarBuffer::getBuffer(){
 	return std::move(_buffer);
 }

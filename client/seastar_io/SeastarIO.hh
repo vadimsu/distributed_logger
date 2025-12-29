@@ -7,13 +7,13 @@
 #include <seastar/net/api.hh>
 #include "IIO.hh"
 
-namespace DistributedLogger {
+namespace distributed_logger {
 
-class Seastar_IIO : public IIO{
+class SeastarIO : public IIO{
         public:
-		Seastar_IIO(const seastar::sstring&, unsigned int);
-                std::shared_ptr<IBufferWrapper> Send(std::shared_ptr<IBufferWrapper>) override;
-		void Connect();
+		SeastarIO(const seastar::sstring&, unsigned int);
+                std::shared_ptr<IBufferWrapper> send(std::shared_ptr<IBufferWrapper>) override;
+		void connect();
 		bool isConnected(){ return _connected; }
 	private:
 		void reconnect();

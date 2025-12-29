@@ -1,11 +1,11 @@
-#include "EventBufferPosix.hh"
+#include "PosixBuffer.hh"
 #include <cstring>
 #include <stdlib.h>
 #include <iostream>
 
-using namespace DistributedLogger;
+using namespace distributed_logger;
 
-EventBufferPosix::EventBufferPosix(size_t size){
+PosixBuffer::PosixBuffer(size_t size){
         _readOffset = 0;
         _writeOffset = 0;
 	_size = size;
@@ -13,11 +13,11 @@ EventBufferPosix::EventBufferPosix(size_t size){
         _buffer = (char*)calloc(1,_size);
 }
 
-EventBufferPosix::~EventBufferPosix(){
+PosixBuffer::~PosixBuffer(){
         free(_buffer);
 }
 
-size_t EventBufferPosix::readData(char* data, size_t size){
+size_t PosixBuffer::readData(char* data, size_t size){
         if (_size <= size + _readOffset){
                 size = _size - _readOffset;
         }
@@ -26,15 +26,15 @@ size_t EventBufferPosix::readData(char* data, size_t size){
         return size;
 }
 
-char *EventBufferPosix::getData(){
+char *PosixBuffer::getData(){
         return _buffer;
 }
 
-size_t EventBufferPosix::getCapacity(){
+size_t PosixBuffer::getCapacity(){
         return _size;
 }
 
-size_t EventBufferPosix::writeData(const char* data, size_t size){
+size_t PosixBuffer::writeData(const char* data, size_t size){
 	if (_size <= size + _writeOffset){
 		size = _size - _writeOffset;
 	}
@@ -44,18 +44,18 @@ size_t EventBufferPosix::writeData(const char* data, size_t size){
         return size;
 }
 
-size_t EventBufferPosix::getReadOffset(){
+size_t PosixBuffer::getReadOffset(){
         return _readOffset;
 }
 
-size_t EventBufferPosix::getWriteOffset(){
+size_t PosixBuffer::getWriteOffset(){
         return _writeOffset;
 }
 
-void EventBufferPosix::setReadOffset(size_t offset){
+void PosixBuffer::setReadOffset(size_t offset){
         _readOffset = offset;
 }
 
-void EventBufferPosix::setWriteOffset(size_t offset){
+void PosixBuffer::setWriteOffset(size_t offset){
         _writeOffset = offset;
 }

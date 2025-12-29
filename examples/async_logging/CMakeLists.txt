@@ -11,7 +11,7 @@ include_directories(
         ../../client/api/iio
         ../../client/api/buffer
 	../../client/internal
-	../../client/posix_iio
+	../../client/posix_io
 	../../client/posix_buffer
 )
 link_directories(
@@ -20,8 +20,8 @@ link_directories(
 add_executable (
         async_logging
         async_logging.cc
-	../../client/posix_iio/EventIIOPosix.cc
-	../../client/posix_buffer/EventBufferPosix.cc
+	../../client/posix_io/PosixIO.cc
+	../../client/posix_buffer/PosixBuffer.cc
 )
 
 target_link_libraries (

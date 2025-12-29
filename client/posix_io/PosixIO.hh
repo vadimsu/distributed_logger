@@ -16,14 +16,14 @@
 #include <openssl/err.h>
 
 
-namespace DistributedLogger {
+namespace distributed_logger {
 
-class EventIIOPosix: public IIO{
+class PosixIO: public IIO{
         public:
-                EventIIOPosix(std::string remoteHost, uint16_t port, std::string&& certificate, std::string&& key, std::string&& trusted);
-                ~EventIIOPosix();
-                std::shared_ptr<IBufferWrapper> Send(std::shared_ptr<IBufferWrapper>) override;
-                void OnWriteOpportunity();
+                PosixIO(std::string remoteHost, uint16_t port, std::string&& certificate, std::string&& key, std::string&& trusted);
+                ~PosixIO();
+                std::shared_ptr<IBufferWrapper> send(std::shared_ptr<IBufferWrapper>) override;
+                void onWriteOpportunity();
 		int getFd(){ return _fd; }
 		bool isConnected() { return _connected; }
 		bool isQueueEmpty() { return _queue.empty(); }

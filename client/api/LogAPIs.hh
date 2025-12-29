@@ -4,7 +4,7 @@
 #include "IBuffer.hh"
 #include "IIO.hh"
 
-namespace DistributedLogger {
+namespace distributed_logger {
 
 template<typename Buffer, typename IIO>
 class Logger{

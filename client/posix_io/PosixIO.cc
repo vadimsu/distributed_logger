@@ -1,4 +1,4 @@
-#include "EventIIOPosix.hh"
+#include "PosixIO.hh"
 #include <syslog.h>
 #include <cstring>
 #include <unistd.h>
@@ -9,9 +9,9 @@
 #define CHK_ERR(err, s) if((err) == -1) { perror(s); exit(1); }
 #define CHK_SSL(err) if((err) == -1) { ERR_print_errors_fp(stderr); exit(2); }
 
-using namespace DistributedLogger;
+using namespace distributed_logger;
 
-void EventIIOPosix::initialize_connection(){
+void PosixIO::initialize_connection(){
         if (_cert == "" || _key == "") {
                 char buf[1024];
                 struct hostent host_entry[2];
@@ -133,18 +133,18 @@ void EventIIOPosix::initialize_connection(){
         syslog(LOG_INFO,"Connected to centralized logging %s",_remoteHost.c_str());
 }
 
-EventIIOPosix::EventIIOPosix(std::string remoteHost, uint16_t port, std::string&& certificate, std::string&& key, std::string&& trusted): _remoteHost(remoteHost), _port(port), _cert(certificate), _key(key), _trusted(trusted), _fd(-1), _ssl(NULL), _connected(false), _asyncMode(false){
+PosixIO::PosixIO(std::string remoteHost, uint16_t port, std::string&& certificate, std::string&& key, std::string&& trusted): _remoteHost(remoteHost), _port(port), _cert(certificate), _key(key), _trusted(trusted), _fd(-1), _ssl(NULL), _connected(false), _asyncMode(false){
         initialize_connection();
 }
 
-EventIIOPosix::~EventIIOPosix(){
+PosixIO::~PosixIO(){
         if (_ssl != NULL){
                 OPENSSL_free(_ssl);
                 _ssl = NULL;
         }
 }
 
-std::shared_ptr<IBufferWrapper> EventIIOPosix::Send(std::shared_ptr<IBufferWrapper> buf){
+std::shared_ptr<IBufferWrapper> PosixIO::send(std::shared_ptr<IBufferWrapper> buf){
         uint32_t length = buf->getCapacity() - 4;
 	std::cout<<"Sending "<<buf->getCapacity()<<std::endl;
         length = htonl(length);
@@ -183,7 +183,7 @@ std::shared_ptr<IBufferWrapper> EventIIOPosix::Send(std::shared_ptr<IBufferWrapp
         return nullptr;
 }
 
-void EventIIOPosix::OnWriteOpportunity(){
+void PosixIO::onWriteOpportunity(){
         while (!_queue.empty()){
 //repeat:
                 auto buf = _queue.front();

@@ -2,12 +2,12 @@
 
 #include "IBuffer.hh"
 
-namespace DistributedLogger {
+namespace distributed_logger {
 
-class EventBufferPosix : public IBufferWrapper{
+class PosixBuffer : public IBufferWrapper{
         public:
-                EventBufferPosix(size_t);
-                ~EventBufferPosix();
+                PosixBuffer(size_t);
+                ~PosixBuffer();
 
                 size_t readData(char*, size_t)override;
                 char *getData() override;

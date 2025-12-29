@@ -5,17 +5,17 @@
 #include <unistd.h>
 #include <sys/epoll.h>
 #include <iostream>
-#include "EventIIOPosix.hh"
-#include "EventBufferPosix.hh"
+#include "PosixIO.hh"
+#include "PosixBuffer.hh"
 #include "LogAPIs.hh"
 
 
 using namespace std;
-using namespace DistributedLogger;
+using namespace distributed_logger;
 
 int main(int argc, char **argv){
 	uint64_t time_to_run_sec = 60;
-	using MyLogger = Logger<EventBufferPosix, EventIIOPosix>;
+	using MyLogger = Logger<PosixBuffer, PosixIO>;
 	uint64_t shard = 3;
 	string host = __FILE__;
 	string certificate;
@@ -24,7 +24,7 @@ int main(int argc, char **argv){
 	#define MAX_EVENTS 10
         struct epoll_event ev, events[MAX_EVENTS];
 	std::cout<<"host "<<host<<std::endl;
-	shared_ptr<EventIIOPosix> eventPosix = make_shared<EventIIOPosix>("127.0.0.1",7777, std::forward<string>(certificate), std::forward<string>(key), std::forward<string>(trusted));
+	shared_ptr<PosixIO> eventPosix = make_shared<PosixIO>("127.0.0.1",7777, std::forward<string>(certificate), std::forward<string>(key), std::forward<string>(trusted));
 	eventPosix->setAsyncMode(true);
 	shared_ptr<MyLogger> distributedLogger = make_shared<MyLogger>(eventPosix);
 	int epollfd = epoll_create1(0);
@@ -45,16 +45,16 @@ int main(int argc, char **argv){
 		for (int n = 0; n < nfds; ++n) {
 			if (events[n].data.fd == eventPosix->getFd()){
 				if (eventPosix->isQueueEmpty()){
-					distributedLogger->LogEvent(MyLogger::Events::event0, shard, host);
-					distributedLogger->LogEvent(MyLogger::Events::event1, shard, host, time(NULL));
+					distributedLogger->logEvent(MyLogger::Events::event0, shard, host);
+					distributedLogger->logEvent(MyLogger::Events::event1, shard, host, time(NULL));
 					logs_submitted += 2;
 				}
-				eventPosix->OnWriteOpportunity();
+				eventPosix->onWriteOpportunity();
 			}	
 		}
 		if (time(NULL) - last_log_ts > 3){
-			distributedLogger->LogEvent(MyLogger::Events::event0, shard, host);
-			distributedLogger->LogEvent(MyLogger::Events::event1, shard, host, time(NULL));
+			distributedLogger->logEvent(MyLogger::Events::event0, shard, host);
+			distributedLogger->logEvent(MyLogger::Events::event1, shard, host, time(NULL));
 			logs_submitted += 2;
 			last_log_ts = time(NULL);
 		}

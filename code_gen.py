@@ -137,7 +137,7 @@ class CppCodeGen(CodeGen):
         self._storage_enum_code = "typedef enum {\n"
         func_idx = 0
         for f in self._func_dict:
-            funct = 'inline\n' + f['return'] + ' ' + f['name'] + "("
+            funct = 'inline\n' + f['return'] + ' ' + f['name'][0].lower() + f['name'][1:] + "("
             total_length_str = "\tint total_length = 4;" + '\n'
             params = f['params']
             self._storage_enum_code = self._storage_enum_code + '\t' + GoCodeGen.get_event_name(f['params'][0])
@@ -169,7 +169,7 @@ class CppCodeGen(CodeGen):
                 if param_idx < len(params):
                     funct = funct + '\n'
             funct = funct + '\n'
-            funct = funct + "\t_iio->Send(buffer);" + '\n'
+            funct = funct + "\t_iio->send(buffer);" + '\n'
             funct = funct + "}\n"
             self._code = self._code + funct
     def get_declarations_code(self):

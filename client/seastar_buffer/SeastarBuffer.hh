@@ -4,12 +4,12 @@
 #include <seastar/core/temporary_buffer.hh>
 #include "IBuffer.hh"
 
-namespace DistributedLogger {
+namespace distributed_logger {
 
-class EventBufferSeastar : public IBufferWrapper{
+class SeastarBuffer : public IBufferWrapper{
         public:
-                EventBufferSeastar(size_t);
-                ~EventBufferSeastar();
+                SeastarBuffer(size_t);
+                ~SeastarBuffer();
 
                 size_t readData(char*, size_t)override;
                 char *getData() override;

@@ -8,12 +8,12 @@
 #include <boost/intrusive/list.hpp>
 #include <boost/intrusive_ptr.hpp>
 #include <boost/lexical_cast.hpp>
-#include "seastar_iio.hh"
-#include "seastar_buffer.hh"
+#include "SeastarIO.hh"
+#include "SeastarBuffer.hh"
 #include "LogAPIs.hh"
 
 namespace bpo = boost::program_options;
-using MyLogger = DistributedLogger::Logger<DistributedLogger::EventBufferSeastar, DistributedLogger::Seastar_IIO>;
+using MyLogger = distributed_logger::Logger<distributed_logger::SeastarBuffer, distributed_logger::SeastarIO>;
 
 int main(int argc, char** argv) {
 	seastar::app_template app;
@@ -25,8 +25,8 @@ int main(int argc, char** argv) {
 		fmt::print("{} {}\n",args["ip"].as<seastar::sstring>(),args["port"].as<int>());
 		seastar::sstring ip = args["ip"].as<seastar::sstring>();
 		auto port = args["port"].as<int>();
-		auto iio = std::make_shared<DistributedLogger::Seastar_IIO>(ip, port);
-		iio->Connect();
+		auto iio = std::make_shared<distributed_logger::SeastarIO>(ip, port);
+		iio->connect();
 		auto logger = std::make_shared<MyLogger>(iio);
 		return seastar::async([iio, logger]{
 			while(true){
@@ -36,9 +36,9 @@ int main(int argc, char** argv) {
 				}
 				auto shard = 1;
 				std::string host = "MySeastarClientHost";
-				logger->LogEvent(MyLogger::Events::event0, shard, host);
+				logger->logEvent(MyLogger::Events::event0, shard, host);
 				shard = 3;
-				logger->LogEvent(MyLogger::Events::event1, shard, host, time(NULL));
+				logger->logEvent(MyLogger::Events::event1, shard, host, time(NULL));
 			}
 		});
 	});
