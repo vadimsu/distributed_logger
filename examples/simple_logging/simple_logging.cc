@@ -20,7 +20,22 @@ int main(int argc, char **argv){
         string key;
        	string trusted;
 	std::cout<<"host "<<host<<std::endl;
-	shared_ptr<PosixIO> eventPosix = make_shared<PosixIO>("127.0.0.1",7777, std::forward<string>(certificate), std::forward<string>(key), std::forward<string>(trusted));
+	string log_server = "127.0.0.1";
+	if (argc > 1){
+		log_server = argv[1];
+	}
+	int log_port = 7777;
+	if (argc > 2){
+		log_port = std::stoi(argv[2]);
+	}
+	if (argc > 4){
+		certificate = argv[3];
+		key = argv[4];
+		if (argc > 5){
+			trusted = argv[5];
+		}
+	}
+	shared_ptr<PosixIO> eventPosix = make_shared<PosixIO>(log_server,log_port, std::forward<string>(certificate), std::forward<string>(key), std::forward<string>(trusted));
 	shared_ptr<MyLogger> distributedLogger = make_shared<MyLogger>(eventPosix);
 	distributedLogger->logEvent(MyLogger::Events::event0, shard, host);
 	distributedLogger->logEvent(MyLogger::Events::event1, shard, host, time(NULL));
