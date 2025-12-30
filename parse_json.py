@@ -3,81 +3,93 @@ import json
 import sys
 import code_gen
 
+
 class ParseException(Exception):
     def __init__(self, name, msg):
         self.__prefix = name
         self.__msg = msg
+
     def __str__(self):
         return self.__prefix + ": " + self.__msg
 
+
 class ReturnTypeMissing(ParseException):
     def __init__(self, msg=""):
-        super().__init__(__class__.__name__,msg)
+        super().__init__(__class__.__name__, msg)
+
 
 class TypeNameMissing(ParseException):
     def __init__(self, msg=""):
-        super().__init__(__class__.__name__,msg)
+        super().__init__(__class__.__name__, msg)
+
 
 class SegmentsMissing(ParseException):
     def __init__(self, msg=""):
-        super().__init__(__class__.__name__,msg)
+        super().__init__(__class__.__name__, msg)
+
 
 class InvalidSegmentNumber(ParseException):
     def __init__(self, msg=""):
-        super().__init__(__class__.__name__,msg)
+        super().__init__(__class__.__name__, msg)
+
 
 class ParametersMissing(ParseException):
     def __init__(self, msg=""):
-        super().__init__(__class__.__name__,msg)
+        super().__init__(__class__.__name__, msg)
+
 
 def get_value_from_segment(segment):
-    if not 'name' in segment:
+    if 'name' not in segment:
         raise
     return segment['name']
 
+
 def get_return_type(f):
-    if not 'return_type' in f:
+    if 'return_type' not in f:
         raise ReturnTypeMissing(str(f))
     rt = f['return_type']
-    if not 'typename' in rt:
+    if 'typename' not in rt:
         raise TypeNameMissing(str(rt))
     tn = rt['typename']
-    if not 'segments' in tn:
+    if 'segments' not in tn:
         raise SegmentsMissing(str(tn))
     sgmnts = tn['segments']
     if len(sgmnts) != 1:
         raise InvalidSegmentNumber(str(len(sgmnts)))
-    if not 'name' in sgmnts[0]:
+    if 'name' not in sgmnts[0]:
         raise TypeNameMissing("in segment "+str(sgmnts[0]))
     return sgmnts[0]['name']
 
+
 def get_name(f):
-    if not 'name' in f:
+    if 'name' not in f:
         raise TypeNameMissing(str(f))
     n = f['name']
-    if not 'segments' in n:
+    if 'segments' not in n:
         raise SegmentsMissing(str(n))
     sgmnts = n['segments']
     if len(sgmnts) != 1:
         raise InvalidSegmentNumber(str(len(sgmnts)))
     return get_value_from_segment(sgmnts[0])
 
+
 def get_parameter(p):
-    if not 'type' in p:
+    if 'type' not in p:
         raise TypeNameMissing(str(p))
     t = p['type']
-    if not 'typename' in t:
+    if 'typename' not in t:
         raise TypeNameMissing(str(t))
     tn = t['typename']
-    if not 'segments' in tn:
+    if 'segments' not in tn:
         raise SegmentsMissing(str(tn))
     sgmnts = tn['segments']
     if len(sgmnts) == 0:
         raise InvalidSegmentNumber(str(len(sgmnts)))
     return (p['name'], get_value_from_segment(sgmnts[0]))
 
+
 def get_parameters(f):
-    if not 'parameters' in f:
+    if 'parameters' not in f:
         raise ParametersMissing(str(f))
     ps = f['parameters']
     params = []
@@ -85,14 +97,16 @@ def get_parameters(f):
         params.append(get_parameter(p))
     return params
 
-print("parsing ",sys.argv[1])
+
+print("parsing ", sys.argv[1])
 with open(sys.argv[1]) as fp:
     code = json.load(fp)
     functions = code['namespace']['functions']
     functs = []
     for f in functions:
         try:
-            functs.append({"return":get_return_type(f), "name":get_name(f), "params":get_parameters(f)})
+            functs.append({"return": get_return_type(f),
+                          "name": get_name(f), "params": get_parameters(f)})
         except Exception as exc:
             print(exc)
     cppCodeGen = code_gen.CppCodeGen(functs)()
@@ -111,9 +125,11 @@ with open(sys.argv[1]) as fp:
     with open("server/storage/mongo/mongo.go", "w") as storage_fp:
         with open("mongo_init.go") as mongo_init_fp:
             mongo_init = mongo_init_fp.read()
-            storage_fp.write(mongo_init + goCodeGen.get_storage_definitions_code())
+            storage_fp.write(mongo_init +
+                             goCodeGen.get_storage_definitions_code())
 #        storage_fp.write(goCodeGen.get_storage_definitions_code())
-    with open("client/internal/distributed_logger_api_int.hh", "w") as storage_fp:
+    with open("client/internal/distributed_logger_api_int.hh", "w") \
+            as storage_fp:
         storage_fp.write(cppCodeGen.get_storage_enum_code())
         storage_fp.write(cppCodeGen.get_declarations_code())
     with open("server/decoder/event_decoder.go", "w") as storage_fp:
