@@ -23,6 +23,7 @@ class GoCodeGen(CodeGen):
     def __init__(self, func_dict):
         super().__init__(func_dict)
         self._declarations_code = ""
+        self._clickhouse_definitions_code = ""
 
     @staticmethod
     def get_event_name(param):
@@ -126,6 +127,54 @@ class GoCodeGen(CodeGen):
                 self._storage_definitions_code + funct_body
             self._storage_definitions_code = \
                 self._storage_definitions_code + "\n}\n"
+
+            # Build ClickHouse typed table and insert function
+            ch_sig = f"func (s *ClickHouseStorage) {f['name']}_{event_name}("
+            ch_params = []
+            cols: List[str] = []
+            placeholders: List[str] = []
+            for p in params:
+                pname = p[0]
+                ptype = p[1]
+                # keep Go param types (uint64 rather than uint64_t)
+                go_ptype = ptype
+                if ptype == "uint64_t":
+                    go_ptype = "uint64"
+                ch_params.append(f"{pname} {go_ptype}")
+
+                # map to ClickHouse types
+                if ptype == "uint64_t":
+                    ch_type = "UInt64"
+                elif ptype == "string":
+                    ch_type = "String"
+                elif ptype == "bool":
+                    ch_type = "Bool"
+                elif ptype in ("int", "int32", "int64"):
+                    ch_type = "Int64"
+                else:
+                    ch_type = "String"
+
+                col_name = pname[0].upper() + pname[1:]
+                cols.append(f"{col_name} {ch_type}")
+                placeholders.append("?")
+
+            ch_sig = ch_sig + ", ".join(ch_params) + ") (error){\n"
+
+            # CREATE TABLE DDL (name prefixed by s.table + "_" + event name)
+            ddl_cols = ", ".join(cols)
+            ch_body = [f"\tcreate := fmt.Sprintf(\"CREATE TABLE IF NOT EXISTS %s_{event_name} ({ddl_cols}) ENGINE = MergeTree() ORDER BY tuple()\", s.table)",
+                       "\t_, err := s.conn.Exec(context.TODO(), create)",
+                       "\tif err != nil {", "\t\treturn err", "\t}"]
+
+            # INSERT using placeholders
+            col_names = ", ".join([c.split()[0] for c in cols])
+            placeholder_list = ",".join(placeholders)
+            insert_stmt = f"\t_, err = s.conn.Exec(context.TODO(), fmt.Sprintf(\"INSERT INTO %s_{event_name} ({col_names}) VALUES ({placeholder_list})\", s.table), {', '.join(p[0] for p in params)})"
+            ch_body.append(insert_stmt)
+            ch_body.append("\treturn err")
+            ch_body.append("}\n")
+
+            self._clickhouse_definitions_code = self._clickhouse_definitions_code + ch_sig + "\n".join(ch_body)
             storage_struct = storage_struct + "}\n"
             self._storage_structures_code = \
                 self._storage_structures_code + storage_struct
@@ -166,6 +215,9 @@ class GoCodeGen(CodeGen):
 
     def get_decoder_code(self):
         return self._decoder_code
+
+    def get_clickhouse_definitions_code(self) -> str:
+        return self._clickhouse_definitions_code
 
 
 class CppCodeGen(CodeGen):

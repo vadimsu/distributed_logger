@@ -113,6 +113,21 @@ def test_cpp_codegen_string_and_uint64_behavior():
     assert 'evt' in enum_code
 
 
+def test_clickhouse_codegen_generates_snippets():
+    funcs = sample_funcs()
+    g = GoCodeGen(funcs)
+    g.generate_code()
+
+    ch_code = g.get_clickhouse_definitions_code()
+
+    assert 'ClickHouseStorage' in ch_code
+    # typed DDL and INSERT should be present
+    assert 'CREATE TABLE IF NOT EXISTS' in ch_code
+    assert 'INSERT INTO' in ch_code
+    assert 'UInt64' in ch_code or 'String' in ch_code
+    assert 'Exec' in ch_code
+
+
 def test_codegen_call_returns_self_and_runs_generate():
     funcs = sample_funcs()
     g = GoCodeGen(funcs)

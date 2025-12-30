@@ -3,7 +3,7 @@ package main
 import (
     "distributedlogger.com/listener"
     "distributedlogger.com/mongo"
-//    "distributedlogger.com/clickhouse"
+    "distributedlogger.com/clickhouse"
     "fmt"
     "os"
     "encoding/json"
@@ -74,7 +74,7 @@ func main(){
         if storageConfig.StorageType == "mongo"{
                 fmt.Println("Initalizing mongo storage")
                 for i:= minShard;i <= maxShard;i++{
-                        sApi, _ := mongo.Init(i, dataRetention, storageConfig.Host, storageConfig.Port, storageConfig.Dbname, storageConfig.Username, storageConfig.Password)
+                        sApi, _ := mongo.Init(dataRetention, storageConfig.Host, storageConfig.Port, storageConfig.Dbname, storageConfig.Username, storageConfig.Password)
                         if err != nil {
                                 fmt.Println(err)
                                 return
@@ -82,16 +82,15 @@ func main(){
                         storageApi = sApi
                 }
         }else if storageConfig.StorageType == "clickhouse"{
-//                fmt.Println("Initializing clickhouse storage")
-//                for i:= minShard;i <= maxShard;i++{
-//			sApi, err := clickhouse.Init(storageConfig.Username, storageConfig.Password, "default", i)
- //                       if err != nil{
-  //                              fmt.Println(err)
-//                                return
-//                        }else{
-//                                storageApi[i] = sApi
-//                        }
-//                }
+                fmt.Println("Initializing clickhouse storage")
+                for i:= minShard;i <= maxShard;i++{
+                        sApi, err := clickhouse.Init(dataRetention, storageConfig.Host, storageConfig.Port, storageConfig.Dbname, storageConfig.Username, storageConfig.Password)
+                        if err != nil{
+                                fmt.Println(err)
+                                return
+                        }
+                        storageApi = sApi
+                }
         }
         listener.LaunchListener(generalConfig.EventCollectorFileName, storageApi)
 }

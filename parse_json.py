@@ -127,7 +127,12 @@ with open(sys.argv[1]) as fp:
             mongo_init = mongo_init_fp.read()
             storage_fp.write(mongo_init +
                              goCodeGen.get_storage_definitions_code())
-#        storage_fp.write(goCodeGen.get_storage_definitions_code())
+
+    # Also generate ClickHouse storage file using a clickhouse init template
+    with open("server/storage/clickhouse/clickhouse.go", "w") as storage_fp:
+        with open("clickhouse_init.go") as ch_init_fp:
+            ch_init = ch_init_fp.read()
+            storage_fp.write(ch_init + goCodeGen.get_clickhouse_definitions_code())
     with open("client/internal/distributed_logger_api_int.hh", "w") \
             as storage_fp:
         storage_fp.write(cppCodeGen.get_storage_enum_code())
