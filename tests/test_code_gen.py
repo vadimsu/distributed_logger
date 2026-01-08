@@ -120,12 +120,20 @@ def test_clickhouse_codegen_generates_snippets():
 
     ch_code = g.get_clickhouse_definitions_code()
 
-    assert 'ClickHouseStorage' in ch_code
-    # typed DDL and INSERT should be present
-    assert 'CREATE TABLE IF NOT EXISTS' in ch_code
-    assert 'INSERT INTO' in ch_code
-    assert 'UInt64' in ch_code or 'String' in ch_code
+    assert 'ClickHouseStorage' in open('clickhouse_init.go').read()
+    # generator should create JSON-based inserts into the single per-shard table
+    assert 'json.Marshal' in ch_code
+    assert "INSERT INTO %s (payload)" in ch_code
     assert 'Exec' in ch_code
+    # ensure init script sets up the single table
+    init_contents = open('clickhouse_init.go').read()
+    assert 'CREATE TABLE IF NOT EXISTS' in init_contents
+    assert 'payload String' in init_contents
+
+    # GetMigrations should be generated and include CREATE MATERIALIZED VIEW
+    assert 'GetMigrations' in ch_code
+    assert 'CREATE MATERIALIZED VIEW' in ch_code
+    assert 'JSONExtract' in ch_code
 
 
 def test_codegen_call_returns_self_and_runs_generate():

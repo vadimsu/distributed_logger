@@ -128,53 +128,62 @@ class GoCodeGen(CodeGen):
             self._storage_definitions_code = \
                 self._storage_definitions_code + "\n}\n"
 
-            # Build ClickHouse typed table and insert function
+            # Build ClickHouse JSON payload variant — write to a single per-shard table similar to Mongo
             ch_sig = f"func (s *ClickHouseStorage) {f['name']}_{event_name}("
             ch_params = []
-            cols: List[str] = []
-            placeholders: List[str] = []
             for p in params:
                 pname = p[0]
                 ptype = p[1]
-                # keep Go param types (uint64 rather than uint64_t)
-                go_ptype = ptype
                 if ptype == "uint64_t":
-                    go_ptype = "uint64"
-                ch_params.append(f"{pname} {go_ptype}")
-
-                # map to ClickHouse types
-                if ptype == "uint64_t":
-                    ch_type = "UInt64"
-                elif ptype == "string":
-                    ch_type = "String"
-                elif ptype == "bool":
-                    ch_type = "Bool"
-                elif ptype in ("int", "int32", "int64"):
-                    ch_type = "Int64"
-                else:
-                    ch_type = "String"
-
-                col_name = pname[0].upper() + pname[1:]
-                cols.append(f"{col_name} {ch_type}")
-                placeholders.append("?")
+                    ptype = "uint64"
+                ch_params.append(f"{pname} {ptype}")
 
             ch_sig = ch_sig + ", ".join(ch_params) + ") (error){\n"
 
-            # CREATE TABLE DDL (name prefixed by s.table + "_" + event name)
-            ddl_cols = ", ".join(cols)
-            ch_body = [f"\tcreate := fmt.Sprintf(\"CREATE TABLE IF NOT EXISTS %s_{event_name} ({ddl_cols}) ENGINE = MergeTree() ORDER BY tuple()\", s.table)",
-                       "\t_, err := s.conn.Exec(context.TODO(), create)",
-                       "\tif err != nil {", "\t\treturn err", "\t}"]
+            ch_body_lines = []
+            ch_body_lines.append("\tpayload := map[string]interface{}{")
+            # include EventType for MV filtering
+            ch_body_lines.append(f"\t\t\"EventType\": \"{event_name}\",")
+            for p in params:
+                pname = p[0]
+                key = pname[0].upper() + pname[1:]
+                ch_body_lines.append(f"\t\t\"{key}\": {pname},")
+            ch_body_lines.append("\t}")
+            ch_body_lines.append("\tjs, _ := json.Marshal(payload)")
+            ch_body_lines.append("\terr := s.conn.Exec(context.TODO(), fmt.Sprintf(\"INSERT INTO %s (payload) VALUES (?)\", s.table), string(js))")
+            ch_body_lines.append("\treturn err")
+            ch_body_lines.append("}\n")
 
-            # INSERT using placeholders
-            col_names = ", ".join([c.split()[0] for c in cols])
-            placeholder_list = ",".join(placeholders)
-            insert_stmt = f"\t_, err = s.conn.Exec(context.TODO(), fmt.Sprintf(\"INSERT INTO %s_{event_name} ({col_names}) VALUES ({placeholder_list})\", s.table), {', '.join(p[0] for p in params)})"
-            ch_body.append(insert_stmt)
-            ch_body.append("\treturn err")
-            ch_body.append("}\n")
+            self._clickhouse_definitions_code = self._clickhouse_definitions_code + ch_sig + "\n".join(ch_body_lines)
 
-            self._clickhouse_definitions_code = self._clickhouse_definitions_code + ch_sig + "\n".join(ch_body)
+            # Generate typed table DDL + materialized view SQL for the event
+            cols: List[str] = []
+            json_extracts: List[str] = []
+            for p in params:
+                pname = p[0]
+                ptype = p[1]
+                col_name = pname[0].upper() + pname[1:]
+                if ptype == "uint64_t":
+                    ch_type = "UInt64"
+                    json_extracts.append(f"JSONExtractUInt(payload, '{col_name}') AS {col_name}")
+                elif ptype == "string":
+                    ch_type = "String"
+                    json_extracts.append(f"JSONExtractString(payload, '{col_name}') AS {col_name}")
+                elif ptype == "bool":
+                    ch_type = "Bool"
+                    json_extracts.append(f"JSONExtractBool(payload, '{col_name}') AS {col_name}")
+                else:
+                    ch_type = "String"
+                    json_extracts.append(f"JSONExtractString(payload, '{col_name}') AS {col_name}")
+                cols.append(f"{col_name} {ch_type}")
+
+            ddl = f"fmt.Sprintf(\"CREATE TABLE IF NOT EXISTS %s_{event_name} ({', '.join(cols)}) ENGINE = MergeTree() ORDER BY tuple()\", s.table)"
+            mv = f"fmt.Sprintf(\"CREATE MATERIALIZED VIEW IF NOT EXISTS mv_%s_{event_name} TO %s_{event_name} AS SELECT {', '.join(json_extracts)} FROM %s WHERE JSONExtractString(payload,'EventType') = '{event_name}'\", s.table, s.table, s.table)"
+
+            # append to migrations method body
+            if not hasattr(self, '_clickhouse_migrations'):
+                self._clickhouse_migrations = []
+            self._clickhouse_migrations.append((ddl, mv))
             storage_struct = storage_struct + "}\n"
             self._storage_structures_code = \
                 self._storage_structures_code + storage_struct
@@ -200,6 +209,16 @@ class GoCodeGen(CodeGen):
         dispatch_funct = dispatch_funct + \
             "\treturn errors.New(\"unknown event\")\n}"
         self._decoder_code = self._decoder_code + dispatch_funct
+
+        # If migrations were collected, generate a helper method that returns them
+        if hasattr(self, '_clickhouse_migrations') and self._clickhouse_migrations:
+            migrations_lines: List[str] = ["func (s *ClickHouseStorage) GetMigrations() []string {", "\treturn []string{"]
+            for ddl, mv in self._clickhouse_migrations:
+                migrations_lines.append(f"\t\t{ddl},")
+                migrations_lines.append(f"\t\t{mv},")
+            migrations_lines.append("\t}")
+            migrations_lines.append("}")
+            self._clickhouse_definitions_code = self._clickhouse_definitions_code + "\n" + "\n".join(migrations_lines) + "\n"
 
     def get_storage_declarations_code(self):
         return self._storage_declarations_code

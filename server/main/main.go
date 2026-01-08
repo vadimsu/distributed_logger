@@ -25,8 +25,6 @@ type StorageConfig struct{
 type GeneralConfig struct{
         StorageConfigFileName string `json:"StorageConfigFileName"`
         EventCollectorFileName string `json:"EventCollectorFileName"`
-        MinShard string `json:"MinShard"`
-        MaxShard string `json:"MaxShard"`
 }
 
 func main(){
@@ -60,36 +58,20 @@ func main(){
                 return
         }
         var storageApi storage.StorageAPI
-        minShard, err := strconv.Atoi(generalConfig.MinShard)
-        if err != nil{
-                fmt.Println(err)
-                return
-        }
-        maxShard, err := strconv.Atoi(generalConfig.MaxShard)
-        if err != nil{
-                fmt.Println(err)
-                return
-        }
         fmt.Println(storageConfig)
         if storageConfig.StorageType == "mongo"{
                 fmt.Println("Initalizing mongo storage")
-                for i:= minShard;i <= maxShard;i++{
-                        sApi, _ := mongo.Init(dataRetention, storageConfig.Host, storageConfig.Port, storageConfig.Dbname, storageConfig.Username, storageConfig.Password)
-                        if err != nil {
-                                fmt.Println(err)
-                                return
-                        }
-                        storageApi = sApi
+                storageApi, _ = mongo.Init(dataRetention, storageConfig.Host, storageConfig.Port, storageConfig.Dbname, storageConfig.Username, storageConfig.Password)
+                if err != nil {
+                	fmt.Println(err)
+                	return
                 }
         }else if storageConfig.StorageType == "clickhouse"{
                 fmt.Println("Initializing clickhouse storage")
-                for i:= minShard;i <= maxShard;i++{
-                        sApi, err := clickhouse.Init(dataRetention, storageConfig.Host, storageConfig.Port, storageConfig.Dbname, storageConfig.Username, storageConfig.Password)
-                        if err != nil{
-                                fmt.Println(err)
-                                return
-                        }
-                        storageApi = sApi
+                storageApi, err = clickhouse.Init(dataRetention, storageConfig.Host, storageConfig.Port, storageConfig.Dbname, storageConfig.Username, storageConfig.Password)
+                if err != nil{
+                        fmt.Println(err)
+                        return
                 }
         }
         listener.LaunchListener(generalConfig.EventCollectorFileName, storageApi)
