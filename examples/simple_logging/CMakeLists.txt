@@ -7,6 +7,7 @@ project(examples)
 #find_package (Valgrind)
 
 include_directories(
+	../common
         ../../client/api
         ../../client/api/iio
         ../../client/api/buffer
@@ -20,6 +21,7 @@ link_directories(
 add_executable (
         simple_logging
         simple_logging.cc
+	../common/common.cc
 	../../client/posix_io/PosixIO.cc
 	../../client/posix_buffer/PosixBuffer.cc
 )
@@ -28,6 +30,7 @@ target_link_libraries (
 	simple_logging
 	crypto
 	ssl
+	boost_program_options
 )
 
 set_target_properties(simple_logging

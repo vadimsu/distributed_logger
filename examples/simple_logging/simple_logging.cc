@@ -7,12 +7,13 @@
 #include "PosixIO.hh"
 #include "PosixBuffer.hh"
 #include "LogAPIs.hh"
-
+#include "common.hh"
 
 using namespace std;
 using namespace distributed_logger;
 
 int main(int argc, char **argv){
+	uint64_t time_to_run_sec = 60;
 	using MyLogger = Logger<PosixBuffer, PosixIO>;
 	uint64_t shard = 3;
 	string host = __FILE__;
@@ -20,25 +21,22 @@ int main(int argc, char **argv){
         string key;
        	string trusted;
 	std::cout<<"host "<<host<<std::endl;
-	string log_server = "127.0.0.1";
-	if (argc > 1){
-		log_server = argv[1];
+	string logserverhost = "127.0.0.1";
+	uint16_t logserverport = 7777;
+	int rc = get_common_options(argc, argv, time_to_run_sec, certificate, key, trusted, logserverhost, logserverport);
+	if (rc != 0){
+		return rc;
 	}
-	int log_port = 7777;
-	if (argc > 2){
-		log_port = std::stoi(argv[2]);
-	}
-	if (argc > 4){
-		certificate = argv[3];
-		key = argv[4];
-		if (argc > 5){
-			trusted = argv[5];
-		}
-	}
-	shared_ptr<PosixIO> eventPosix = make_shared<PosixIO>(log_server,log_port, std::forward<string>(certificate), std::forward<string>(key), std::forward<string>(trusted));
+	shared_ptr<PosixIO> eventPosix = make_shared<PosixIO>(logserverhost,logserverport, std::forward<string>(certificate), std::forward<string>(key), std::forward<string>(trusted));
 	shared_ptr<MyLogger> distributedLogger = make_shared<MyLogger>(eventPosix);
-	distributedLogger->logEvent(MyLogger::Events::event0, shard, host);
-	distributedLogger->logEvent(MyLogger::Events::event1, shard, host, time(NULL));
+	uint64_t start_ts = time(NULL);
+	uint64_t logs_submitted = 0;
+	while(time(NULL) - start_ts < time_to_run_sec){
+		distributedLogger->logEvent(MyLogger::Events::event0, shard, host);
+		distributedLogger->logEvent(MyLogger::Events::event1, shard, host, time(NULL));
+		logs_submitted += 2;
+	}
+	cout<<"logs submitted "<<logs_submitted<<endl;
 	sleep(10);
 	return 0;
 }

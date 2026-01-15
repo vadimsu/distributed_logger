@@ -23,6 +23,7 @@ add_executable (
         seastar_app_logging
         seastar_app_logging.cc
 	../../client/seastar_io/SeastarIO.cc
+	../../client/seastar_io/SeastarTLS_IO.cc
 	../../client/seastar_buffer/SeastarBuffer.cc
 )
 

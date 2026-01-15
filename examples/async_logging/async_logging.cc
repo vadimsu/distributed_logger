@@ -8,6 +8,7 @@
 #include "PosixIO.hh"
 #include "PosixBuffer.hh"
 #include "LogAPIs.hh"
+#include "common.hh"
 
 
 using namespace std;
@@ -21,10 +22,16 @@ int main(int argc, char **argv){
 	string certificate;
         string key;
        	string trusted;
+	string logserverhost = "127.0.0.1";
+	uint16_t logserverport = 7777;
+	int rc = get_common_options(argc, argv, time_to_run_sec, certificate, key, trusted, logserverhost, logserverport);
+	if (rc != 0){
+		return rc;
+	}
 	#define MAX_EVENTS 10
         struct epoll_event ev, events[MAX_EVENTS];
 	std::cout<<"host "<<host<<std::endl;
-	shared_ptr<PosixIO> eventPosix = make_shared<PosixIO>("127.0.0.1",7777, std::forward<string>(certificate), std::forward<string>(key), std::forward<string>(trusted));
+	shared_ptr<PosixIO> eventPosix = make_shared<PosixIO>(logserverhost,logserverport, std::forward<string>(certificate), std::forward<string>(key), std::forward<string>(trusted));
 	eventPosix->setAsyncMode(true);
 	shared_ptr<MyLogger> distributedLogger = make_shared<MyLogger>(eventPosix);
 	int epollfd = epoll_create1(0);
@@ -33,9 +40,6 @@ int main(int argc, char **argv){
 	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, eventPosix->getFd(), &ev) == -1) {
 		cout<<"epoll_ctl: listen_sock"<<endl;
 		return -1;
-	}
-	if (argc > 1){
-		time_to_run_sec = stoi(argv[1]);
 	}
 	uint64_t start_ts = time(NULL);
 	uint64_t last_log_ts = time(NULL);

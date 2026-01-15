@@ -4,6 +4,7 @@
 #include <seastar/core/sstring.hh>
 #include <seastar/net/inet_address.hh>
 #include <seastar/util/log.hh>
+#include <seastar/core/when_all.hh>
 #include "SeastarIO.hh"
 #include "SeastarBuffer.hh"
 
@@ -16,29 +17,33 @@ SeastarIO::SeastarIO(const seastar::sstring& ip, unsigned int port){
 	_transmitting = false;
 }
 
+SeastarIO::~SeastarIO(){
+}
+
+void SeastarIO::initializeConnectedSocket(seastar::connected_socket fd){
+	seastar::net::keepalive_params kap;
+	std::chrono::seconds idleDuration(1);
+	std::chrono::seconds interval(5);
+	std::get<0>(kap).idle = idleDuration;
+	std::get<0>(kap).interval = interval;
+	std::get<0>(kap).count = 5;
+	fd.set_keepalive_parameters(kap);
+	fd.set_keepalive(true);
+	_socket = std::move(fd);
+	_in = _socket.input();
+	_out = _socket.output();
+	_connected = true;
+}
+
 void SeastarIO::reconnect(){
 	if (_reconnect_timer.armed()){
 		return;
 	}
-	std::chrono::seconds reconnectDuration(10);
+	std::chrono::seconds reconnectDuration(1);
 	_reconnect_timer.set_callback([this] {
 		seastar::connect(_address).then([this](seastar::connected_socket fd){
-			seastar::net::keepalive_params kap;
-			std::chrono::seconds idleDuration(1);
-			std::chrono::seconds interval(5);
-			std::get<0>(kap).idle = idleDuration;
-			std::get<0>(kap).interval = interval;
-			std::get<0>(kap).count = 5;
-			fd.set_keepalive_parameters(kap);
-			fd.set_keepalive(true);
-			_socket = std::move(fd);
-			_in = _socket.input();
-			_out = _socket.output();
-			_connected = true;
-			return;
+			initializeConnectedSocket(std::move(fd));
 		}).handle_exception([this](std::exception_ptr e){
-			//fmt::print("{}\n",*e);
-//			std::cout<<e->what()<<std::endl;
 			reconnect();
 		});
         });
@@ -47,6 +52,20 @@ void SeastarIO::reconnect(){
 
 void SeastarIO::connect(){
        reconnect();
+}
+
+seastar::future<> SeastarIO::disconnect(){
+	if (!_connected){
+		return seastar::make_ready_future<>();
+	}
+	auto out_fut = _out.close();
+	auto in_fut = _in.close();
+	return seastar::when_all(std::move(out_fut), std::move(in_fut)).then([this](auto futs){
+		return seastar::make_ready_future<>();
+	}).handle_exception([this] (std::exception_ptr e) {
+		fmt::print("{}\n",e);
+		return seastar::make_ready_future<>();
+	});
 }
 
 std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> buffer){
@@ -75,7 +94,7 @@ std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> 
 			}
 			return seastar::make_ready_future<>();
 		}).handle_exception([this](std::exception_ptr e) mutable{
-			fmt::print("EXCEPTION {}\n",e);
+			fmt::print("{}\n",e);
 			_transmitting = false;
 			_connected = false;
 			return seastar::make_ready_future<>();
