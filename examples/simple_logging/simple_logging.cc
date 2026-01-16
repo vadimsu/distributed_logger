@@ -32,8 +32,8 @@ int main(int argc, char **argv){
 	uint64_t start_ts = time(NULL);
 	uint64_t logs_submitted = 0;
 	while(time(NULL) - start_ts < time_to_run_sec){
-		distributedLogger->logEvent(MyLogger::Events::event0, shard, host);
-		distributedLogger->logEvent(MyLogger::Events::event1, shard, host, time(NULL));
+		distributedLogger->LogEvent_event0(shard, host);
+		distributedLogger->LogEvent_event1(shard, host, time(NULL));
 		logs_submitted += 2;
 	}
 	cout<<"logs submitted "<<logs_submitted<<endl;

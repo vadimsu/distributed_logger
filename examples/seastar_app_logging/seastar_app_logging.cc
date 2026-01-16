@@ -81,9 +81,9 @@ int main(int argc, char** argv) {
 				}
 				auto shard = 1;
 				std::string host = "MySeastarClientHost";
-				logger->logEvent(MyLogger::Events::event0, shard, host);
+				logger->LogEvent_event0(shard, host);
 				shard = 3;
-				logger->logEvent(MyLogger::Events::event1, shard, host, time(NULL));
+				logger->LogEvent_event1(shard, host, time(NULL));
 			}
 			iio->disconnect().get();
 		});

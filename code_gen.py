@@ -259,12 +259,16 @@ class CppCodeGen(CodeGen):
 
             # Function signature
             ret = f.get("return", "void")
-            name = f['name'][0].lower() + f['name'][1:]
+            name = f['name']
             params_parts: List[str] = []
             total_length = ["\tint total_length = 4;"]
-
+            name_suffix = ""
             for p in f.get("params", []):
                 p_name, p_type = p[0], p[1]
+                if name_suffix == "":
+                    name_suffix = p_name
+                    total_length.append("\ttotal_length += 8;")
+                    continue
                 prefix = "std::" if p_type == "string" else ""
                 params_parts.append(f"{prefix}{p_type} {p_name}")
                 if p_type == "string":
@@ -272,12 +276,15 @@ class CppCodeGen(CodeGen):
                 elif p_type == "uint64_t":
                     total_length.append("\ttotal_length += 8;")
 
-            lines.append(f"inline\n{ret} {name}({', '.join(params_parts)}) {{")
+            lines.append(f"inline\n{ret} {name}_{name_suffix}({', '.join(params_parts)}) {{")
             lines.extend(total_length)
             lines.append("\tstd::shared_ptr<Buffer> buffer = std::make_shared<Buffer>(total_length);")
             lines.append("\tbuffer->setWriteOffset(4);")
-            for p in f.get("params", []):
-                lines.append(f"\tencode(buffer,{p[0]});")
+            for idx, p in enumerate(f.get("params", [])):
+                if idx == 0:
+                    lines.append(f"\tencode(buffer,Events::{p[0]});")
+                else:
+                    lines.append(f"\tencode(buffer,{p[0]});")
             lines.append("\t_iio->send(buffer);")
             lines.append("}")
 
