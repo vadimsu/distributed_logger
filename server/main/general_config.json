@@ -1,6 +1,4 @@
 {
 	"StorageConfigFileName":"storage_config.json",
-        "EventCollectorFileName":"event_collector.json",
-	"MinShard":"1",
-	"MaxShard":"3"
+        "EventCollectorFileName":"event_collector_no_tls.json"
 }

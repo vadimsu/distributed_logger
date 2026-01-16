@@ -4,8 +4,8 @@
 	        "ip":"127.0.0.1"
 	},
 	"certificate":{
-		"server":"",
-		"key":"",
-		"root":""
+		"server":"/home/vsuraev/mtls_server.crt",
+		"key":"/home/vsuraev/mtls_server.key",
+		"root":"/home/vsuraev/mtls_ca.crt"
 	}
 }

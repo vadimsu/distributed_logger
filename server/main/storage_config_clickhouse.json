@@ -1,0 +1,9 @@
+{
+	"StorageType":"clickhouse",
+        "Username":"default",
+        "Password":"predator",
+        "Host":"127.0.0.1",
+        "Port":"9000",
+        "Dbname":"default",
+        "DataRetentionPeriod":"3"
+}

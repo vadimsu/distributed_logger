@@ -89,7 +89,7 @@ class GoCodeGen(CodeGen):
                         decoder_func = decoder_func + \
                             '\t' + p[0] + \
                             ", decodedThisTime,_ "\
-                            "= DecodeString(packet[decoded:],false)" + '\n'
+                            "= DecodeString(packet[decoded:])" + '\n'
                     else:
                         decoder_func = decoder_func + \
                             '\t' + p[0] + \
@@ -268,7 +268,7 @@ class CppCodeGen(CodeGen):
                 prefix = "std::" if p_type == "string" else ""
                 params_parts.append(f"{prefix}{p_type} {p_name}")
                 if p_type == "string":
-                    total_length.append(f"\ttotal_length += {p_name}.size() + 4;")
+                    total_length.append(f"\ttotal_length += {p_name}.size() + 2;")
                 elif p_type == "uint64_t":
                     total_length.append("\ttotal_length += 8;")
 

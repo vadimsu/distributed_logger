@@ -37,24 +37,9 @@ func DecodeUint64(packet []byte) (uint64, int, error){
         return value, 8, nil
 }
 
-func DecodeString(packet []byte, skipType bool) (string, int, error){
+func DecodeString(packet []byte) (string, int, error){
         var value string
         decoded := 0
-        if skipType == false{
-                stringType, decodedThisTime, err := DecodeUint16(packet)
-                if err != nil{
-                        fmt.Println(err)
-                        return "", 0, errors.New("cannot decode stringType")
-                }
-                if stringType != 2{
-                        fmt.Println("stringType ",stringType," expected 1")
-                        return "", 0, errors.New("stringType mismatch")
-                }
-                decoded += decodedThisTime
-        }
-        if len(packet) <= decoded{
-                return "",0,errors.New("not enough bytes to decode string length")
-        }
         stringLength, decodedThisTime, err := DecodeUint16(packet[decoded:])
         if err != nil{
                 fmt.Println(err)
