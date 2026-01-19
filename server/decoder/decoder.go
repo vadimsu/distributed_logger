@@ -15,7 +15,7 @@ func DecodeUint16(packet []byte) (uint16, int, error){
                 return value, 0, errors.New("not enough bytes to decode uint16")
         }
         reader := bytes.NewReader(packet[:2])
-        err := binary.Read(reader, binary.LittleEndian, &value)
+        err := binary.Read(reader, binary.BigEndian, &value)
         if err != nil{
                 return 0, 0, err
         }
@@ -29,7 +29,7 @@ func DecodeUint64(packet []byte) (uint64, int, error){
                 return value, 0, errors.New("not enough bytes to decode uint64")
         }
         reader := bytes.NewReader(packet[:8])
-        err := binary.Read(reader, binary.LittleEndian, &value)
+        err := binary.Read(reader, binary.BigEndian, &value)
         if err != nil{
                 return 0, 0, err
         }

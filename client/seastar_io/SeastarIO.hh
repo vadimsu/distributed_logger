@@ -29,6 +29,7 @@ class SeastarIO : public IIO{
 		std::list<seastar::temporary_buffer<char>> _wqueue;
 		bool _connected;
 		bool _transmitting;
+		seastar::future<> _tx_finished;
 };
 
 }

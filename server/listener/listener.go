@@ -36,7 +36,11 @@ func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
                         alreadyRead = alreadyRead + numOfBytes
                         if alreadyRead == 4{
                                 reader := bytes.NewReader(headerBuf)
-                                _ = binary.Read(reader, binary.BigEndian, &packetLength)
+				err := binary.Read(reader, binary.BigEndian, &packetLength)
+				if err != nil {
+					fmt.Println(err)
+					break
+				}
                                 alreadyRead = 0
                                 //fmt.Println("packet length ",packetLength)
                                 readBuf = make([]byte, packetLength)
@@ -50,17 +54,19 @@ func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
                                 }
                                 alreadyRead = alreadyRead + numOfBytes
                                 if alreadyRead == int(packetLength){
-//                                        if len(readBuf) > 12 {
+                                        if len(readBuf) > 12 {
 						event, decodedThisTime, err := decoder.DecodeUint64(readBuf)
 						if err == nil {
 							fmt.Println("decoding event ",event)
 							decoder.Event_dispatch(event, readBuf[decodedThisTime:], storageAPI)
 						}else{
 							fmt.Println("error in decoding ",err)
+							break
 						}
-  //                                      }else{
-    //                                            fmt.Println("unexpectedly short packet ",len(readBuf))
-      //                                  }
+                                        }else{
+                                                fmt.Println("unexpectedly short packet ",len(readBuf))
+						break
+                                        }
                                         packetLength = 0
                                         alreadyRead = 0
                                 }

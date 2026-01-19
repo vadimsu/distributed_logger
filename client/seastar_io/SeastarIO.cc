@@ -10,7 +10,7 @@
 
 using namespace distributed_logger;
 
-SeastarIO::SeastarIO(const seastar::sstring& ip, unsigned int port){
+SeastarIO::SeastarIO(const seastar::sstring& ip, unsigned int port): _tx_finished(seastar::make_ready_future<>()){
 	seastar::net::inet_address in(seastar::sstring(ip.data(), ip.size()));
         _address = seastar::make_ipv4_address({in, port});
 	_connected = false;
@@ -30,8 +30,8 @@ void SeastarIO::initializeConnectedSocket(seastar::connected_socket fd){
 	fd.set_keepalive_parameters(kap);
 	fd.set_keepalive(true);
 	_socket = std::move(fd);
-	_in = _socket.input();
-	_out = _socket.output();
+	_in = std::move(_socket.input());
+	_out = std::move(_socket.output());
 	_connected = true;
 }
 
@@ -58,11 +58,24 @@ seastar::future<> SeastarIO::disconnect(){
 	if (!_connected){
 		return seastar::make_ready_future<>();
 	}
-	auto out_fut = _out.close();
-	auto in_fut = _in.close();
-	return seastar::when_all(std::move(out_fut), std::move(in_fut)).then([this](auto futs){
-		return seastar::make_ready_future<>();
-	}).handle_exception([this] (std::exception_ptr e) {
+	return _tx_finished.then([this]{
+		auto out_fut = _out.close();
+		auto in_fut = _in.close();
+		return seastar::when_all(std::move(out_fut), std::move(in_fut)).then([this](auto futs){
+			if (std::get<0>(futs).failed()){
+				fmt::print("failed while waiting for in {}\n",
+						std::get<0>(futs).get_exception());
+			}
+			if (std::get<1>(futs).failed()){
+				fmt::print("failed while waiting for out {}\n",
+						std::get<1>(futs).get_exception());
+			}
+			return seastar::make_ready_future<>();
+		}).handle_exception([this] (std::exception_ptr e) {
+			fmt::print("{}\n",e);
+			return seastar::make_ready_future<>();
+		});
+	}).handle_exception([this] (std::exception_ptr e){
 		fmt::print("{}\n",e);
 		return seastar::make_ready_future<>();
 	});
@@ -78,7 +91,7 @@ std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> 
 		return nullptr;
 	}
 	_transmitting = true;
-        seastar::do_until([this] {
+        _tx_finished = std::move(seastar::do_until([this] {
 		if (_wqueue.empty() || !_connected){
 			_transmitting = false;
 			return true;
@@ -99,6 +112,6 @@ std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> 
 			_connected = false;
 			return seastar::make_ready_future<>();
 		});
-	});
+	}));
 	return nullptr;
 }

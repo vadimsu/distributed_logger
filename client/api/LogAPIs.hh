@@ -20,11 +20,12 @@ class Logger{
 //                        uint16_t type = static_cast<std::underlying_type_t<LoggingDataType>>(LoggingDataType::INT);
 //                        auto written = buffer->writeData((const char*)&type, sizeof(type));
 			std::cout<<" writing int "<<sizeof(v)<<std::endl;
-                        auto written = buffer->writeData((const char*)&v, sizeof(v));
+			uint64_t v_e = htobe64(v);
+                        auto written = buffer->writeData((const char*)&v_e, sizeof(v_e));
                         return written;
                 }
 		int encode(std::shared_ptr<IBufferWrapper> buffer, const std::string& str) {
-                        uint16_t size = static_cast<uint16_t>(str.size());
+                        uint16_t size = htons(static_cast<uint16_t>(str.size()));
 			std::cout<<" writing size "<<sizeof(size)<<std::endl;
                         auto written = buffer->writeData((const char*)&size, sizeof(size));
 			std::cout<<" writing data "<<str.size()<<std::endl;

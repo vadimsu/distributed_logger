@@ -153,14 +153,10 @@ std::shared_ptr<IBufferWrapper> PosixIO::send(std::shared_ptr<IBufferWrapper> bu
 		_queue.push_back(buf);
 		return nullptr;
 	}
-//        length = buf->getCapacity() - 10;
-//        length = htonl(length);
-//        memcpy(buf->getData() + 6, &length, sizeof(length));
         if (!_queue.empty()){
                 _queue.push_back(buf);
                 return nullptr;
         }
-//repeat:
         int written = 0;
         if (_cert == "" || _key == ""){
                 written = write(_fd,buf->getData() + buf->getReadOffset(), buf->getCapacity() - buf->getReadOffset());
