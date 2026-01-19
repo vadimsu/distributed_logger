@@ -48,19 +48,11 @@ int main(int argc, char **argv){
 		auto nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
 		for (int n = 0; n < nfds; ++n) {
 			if (events[n].data.fd == eventPosix->getFd()){
-				if (eventPosix->isQueueEmpty()){
-					distributedLogger->LogEvent_event0(shard, host);
-					distributedLogger->LogEvent_event1(shard, host, time(NULL));
-					logs_submitted += 2;
-				}
+				distributedLogger->LogEvent_event0(shard, host);
+				distributedLogger->LogEvent_event1(shard, host, time(NULL));
+				logs_submitted += 2;
 				eventPosix->onWriteOpportunity();
 			}	
-		}
-		if (time(NULL) - last_log_ts > 3){
-			distributedLogger->LogEvent_event0(shard, host);
-			distributedLogger->LogEvent_event1(shard, host, time(NULL));
-			logs_submitted += 2;
-			last_log_ts = time(NULL);
 		}
 	}
 	cout<<"logs submitted "<<logs_submitted<<endl;

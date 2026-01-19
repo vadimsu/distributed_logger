@@ -75,7 +75,6 @@ int main(int argc, char** argv) {
 			uint64_t start_ts = time(NULL);
 			uint64_t logs_submitted = 0;
 			while(time(NULL) - start_ts < time_to_run_sec){
-				seastar::sleep(std::chrono::seconds(1)).get();
 				if (!iio->isConnected()){
 					continue;
 				}
@@ -84,7 +83,10 @@ int main(int argc, char** argv) {
 				logger->LogEvent_event0(shard, host);
 				shard = 3;
 				logger->LogEvent_event1(shard, host, time(NULL));
+				logs_submitted += 2;
 			}
+			fmt::print("sent {}\n", logs_submitted);
+			fmt::print("disconnecting\n");
 			iio->disconnect().get();
 		});
 	});
