@@ -11,6 +11,7 @@ import (
 	"bytes"
 	"distributedlogger.com/storage"
 	"distributedlogger.com/decoder"
+	"distributedlogger.com/event_decoder"
 	"distributedlogger.com/config"
 	"crypto/tls"
 	"crypto/x509"
@@ -58,7 +59,7 @@ func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
 						event, decodedThisTime, err := decoder.DecodeUint64(readBuf)
 						if err == nil {
 							fmt.Println("decoding event ",event)
-							decoder.Event_dispatch(event, readBuf[decodedThisTime:], storageAPI)
+							event_decoder.Event_dispatch(event, readBuf[decodedThisTime:], storageAPI)
 						}else{
 							fmt.Println("error in decoding ",err)
 							break

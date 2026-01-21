@@ -10,7 +10,7 @@ include_directories(
         ../../client/api
         ../../client/api/iio
         ../../client/api/buffer
-	../../client/internal
+	../../generated/client
 	../../client/seastar_io
 	../../client/seastar_buffer
 )

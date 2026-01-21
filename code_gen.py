@@ -35,8 +35,9 @@ class GoCodeGen(CodeGen):
         valid_funcs = [f for f in self._func_dict if len(f.get('params', [])) >= 2]
 
         self._storage_enum_code = "package storage\n\nconst (\n"
-        self._decoder_code = "package decoder\n\n"
+        self._decoder_code = "package event_decoder\n\n"
         self._decoder_code += 'import (\n\t"distributedlogger.com/storage"\n\t"errors"\n)\n\n'
+        self._decoder_code += 'import (\n\t"distributedlogger.com/decoder"\n)\n\n'
         self._storage_definitions_code = ""
         self._storage_structures_code = ""
         self._storage_declarations_code = "type StorageAPI interface{\n"
@@ -89,12 +90,12 @@ class GoCodeGen(CodeGen):
                         decoder_func = decoder_func + \
                             '\t' + p[0] + \
                             ", decodedThisTime,_ "\
-                            "= DecodeString(packet[decoded:])" + '\n'
+                            "= decoder.DecodeString(packet[decoded:])" + '\n'
                     else:
                         decoder_func = decoder_func + \
                             '\t' + p[0] + \
                             ", decodedThisTime,_ "\
-                            "= DecodeUint64(packet[decoded:])" + '\n'
+                            "= decoder.DecodeUint64(packet[decoded:])" + '\n'
                     decoder_func = decoder_func + \
                         "\tdecoded = decoded + decodedThisTime\n"
                 else:
@@ -119,7 +120,7 @@ class GoCodeGen(CodeGen):
                 funct = funct + '\n'
             funct_body = funct_body + "\t\t},\n\t}\n"
             funct_body = funct_body + '\t' + \
-                "_, err := s.collection.InsertMany(context.TODO(), fields)\n"
+                "_, err := s.collection.InsertOne(context.TODO(), fields)\n"
             funct_body = funct_body + "\treturn err"
             self._storage_definitions_code = \
                 self._storage_definitions_code + ") (error){\n"

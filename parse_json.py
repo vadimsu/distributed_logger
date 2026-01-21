@@ -2,6 +2,7 @@
 import json
 import sys
 import code_gen
+import os
 
 
 class ParseException(Exception):
@@ -118,25 +119,32 @@ with open(sys.argv[1]) as fp:
     print(goCodeGen.get_storage_definitions_code())
 #    print(goCodeGen.get_storage_structures_code())
     print(goCodeGen.get_decoder_code())
-    with open("server/storage/storage.go", "w") as storage_fp:
+    os.makedirs("generated", exist_ok=True)
+    os.makedirs("generated/server", exist_ok=True)
+    os.makedirs("generated/server/storage", exist_ok=True)
+    os.makedirs("generated/server/storage/mongo", exist_ok=True)
+    os.makedirs("generated/server/storage/clickhouse", exist_ok=True)
+    os.makedirs("generated/server/event_decoder", exist_ok=True)
+    os.makedirs("generated/client", exist_ok=True)
+    with open("generated/server/storage/storage.go", "w") as storage_fp:
         storage_fp.write(goCodeGen.get_storage_enum_code())
         storage_fp.write(goCodeGen.get_storage_structures_code())
         storage_fp.write(goCodeGen.get_storage_declarations_code())
-    with open("server/storage/mongo/mongo.go", "w") as storage_fp:
+    with open("generated/server/storage/mongo/mongo.go", "w") as storage_fp:
         with open("mongo_init.go") as mongo_init_fp:
             mongo_init = mongo_init_fp.read()
             storage_fp.write(mongo_init +
                              goCodeGen.get_storage_definitions_code())
 
     # Also generate ClickHouse storage file using a clickhouse init template
-    with open("server/storage/clickhouse/clickhouse.go", "w") as storage_fp:
+    with open("generated/server/storage/clickhouse/clickhouse.go", "w") as storage_fp:
         with open("clickhouse_init.go") as ch_init_fp:
             ch_init = ch_init_fp.read()
             storage_fp.write(ch_init + goCodeGen.get_clickhouse_definitions_code())
-    with open("client/internal/distributed_logger_api_int.hh", "w") \
+    with open("generated/client/distributed_logger_api_int.hh", "w") \
             as storage_fp:
         storage_fp.write(cppCodeGen.get_storage_enum_code())
         storage_fp.write(cppCodeGen.get_declarations_code())
-    with open("server/decoder/event_decoder.go", "w") as storage_fp:
+    with open("generated/server/event_decoder/event_decoder.go", "w") as storage_fp:
         storage_fp.write(goCodeGen.get_decoder_code())
 #    print(str(cppCodeGen()))

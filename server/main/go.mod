@@ -6,6 +6,8 @@ replace distributedlogger.com/listener => ../listener
 
 replace distributedlogger.com/decoder => ../decoder
 
+replace distributedlogger.com/event_decoder => ../../generated/server/event_decoder
+
 require (
 	//        distributedlogger.com/clickhouse v0.0.0-00010101000000-000000000000
 	distributedlogger.com/listener v0.0.0-00010101000000-000000000000
@@ -14,12 +16,15 @@ require (
 	distributedlogger.com/storage v0.0.0-00010101000000-000000000000
 )
 
-require distributedlogger.com/mongo v0.0.0-00010101000000-000000000000
+require (
+	distributedlogger.com/clickhouse v0.0.0-00010101000000-000000000000
+	distributedlogger.com/mongo v0.0.0-00010101000000-000000000000
+)
 
 require (
-	distributedlogger.com/clickhouse v0.0.0-00010101000000-000000000000 // indirect
 	distributedlogger.com/config v0.0.0-00010101000000-000000000000 // indirect
 	distributedlogger.com/decoder v0.0.0-00010101000000-000000000000 // indirect
+	distributedlogger.com/event_decoder v0.0.0-00010101000000-000000000000 // indirect
 	github.com/ClickHouse/ch-go v0.52.1 // indirect
 	github.com/ClickHouse/clickhouse-go/v2 v2.8.0 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect
@@ -47,14 +52,14 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace distributedlogger.com/storage => ../storage
+replace distributedlogger.com/storage => ../../generated/server/storage
 
 replace distributedlogger.com/config => ../config
 
-replace distributedlogger.com/redis => ../storage/redis
+replace distributedlogger.com/redis => ../../generated/server/storage/redis
 
-replace distributedlogger.com/pg => ../storage/pg
+replace distributedlogger.com/pg => ../../generated/server/storage/pg
 
-replace distributedlogger.com/mongo => ../storage/mongo
+replace distributedlogger.com/mongo => ../../generated/server/storage/mongo
 
-replace distributedlogger.com/clickhouse => ../storage/clickhouse
+replace distributedlogger.com/clickhouse => ../../generated/server/storage/clickhouse

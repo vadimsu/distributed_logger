@@ -11,7 +11,7 @@ include_directories(
         ../../client/api
         ../../client/api/iio
         ../../client/api/buffer
-	../../client/internal
+	../../generated/client
 	../../client/posix_io
 	../../client/posix_buffer
 )
