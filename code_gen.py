@@ -143,15 +143,17 @@ class GoCodeGen(CodeGen):
 
             ch_body_lines = []
             ch_body_lines.append("\tpayload := map[string]interface{}{")
-            # include EventType for MV filtering
-            ch_body_lines.append(f"\t\t\"EventType\": \"{event_name}\",")
+#            # include EventType for MV filtering
+#            ch_body_lines.append(f"\t\t\"EventType\": \"{event_name}\",")
             for p in params:
+                if "event" in p[0]:
+                    continue
                 pname = p[0]
                 key = pname[0].upper() + pname[1:]
                 ch_body_lines.append(f"\t\t\"{key}\": {pname},")
             ch_body_lines.append("\t}")
             ch_body_lines.append("\tjs, _ := json.Marshal(payload)")
-            ch_body_lines.append("\terr := s.conn.Exec(context.TODO(), fmt.Sprintf(\"INSERT INTO %s (payload) VALUES (?)\", s.table), string(js))")
+            ch_body_lines.append("\terr := s.conn.Exec(context.TODO(), fmt.Sprintf(\"INSERT INTO %s (event, payload) VALUES (?,?)\", s.table), "+event_name+", string(js))")
             ch_body_lines.append("\treturn err")
             ch_body_lines.append("}\n")
 
@@ -161,6 +163,8 @@ class GoCodeGen(CodeGen):
             cols: List[str] = []
             json_extracts: List[str] = []
             for p in params:
+                if "event" in p[0]:
+                    continue
                 pname = p[0]
                 ptype = p[1]
                 col_name = pname[0].upper() + pname[1:]
@@ -179,7 +183,8 @@ class GoCodeGen(CodeGen):
                 cols.append(f"{col_name} {ch_type}")
 
             ddl = f"fmt.Sprintf(\"CREATE TABLE IF NOT EXISTS %s_{event_name} ({', '.join(cols)}) ENGINE = MergeTree() ORDER BY tuple()\", s.table)"
-            mv = f"fmt.Sprintf(\"CREATE MATERIALIZED VIEW IF NOT EXISTS mv_%s_{event_name} TO %s_{event_name} AS SELECT {', '.join(json_extracts)} FROM %s WHERE JSONExtractString(payload,'EventType') = '{event_name}'\", s.table, s.table, s.table)"
+            event_name_const = event_name[:1].upper() + event_name[1:]
+            mv = f"fmt.Sprintf(\"CREATE MATERIALIZED VIEW IF NOT EXISTS mv_%s_{event_name} TO %s_{event_name} AS SELECT {', '.join(json_extracts)} FROM %s WHERE event = %d\", s.table, s.table, s.table, storage.{event_name_const})"
 
             # append to migrations method body
             if not hasattr(self, '_clickhouse_migrations'):

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"distributedlogger.com/storage"
 )
 
 type ClickHouseStorage struct{
@@ -35,7 +36,7 @@ func Init(args ...any) (*ClickHouseStorage, error){
 	}
 	table := "events"
 	// ensure a single JSON payload table exists for this shard
-	create := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (payload String) ENGINE = MergeTree() ORDER BY tuple()", table)
+	create := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (event UInt64, payload String) ENGINE = MergeTree() ORDER BY tuple()", table)
 	err = conn.Exec(context.Background(), create)
 	if err != nil {
 		fmt.Println("on table creation ",err)
