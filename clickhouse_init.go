@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"distributedlogger.com/storage"
+	"distributedlogger.com/event_decoder"
 )
 
 type ClickHouseStorage struct{

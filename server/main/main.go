@@ -9,6 +9,7 @@ import (
     "encoding/json"
     "io/ioutil"
     "distributedlogger.com/storage"
+    "distributedlogger.com/ingester"
     "strconv"
 )
 
@@ -74,5 +75,6 @@ func main(){
                         return
                 }
         }
-        listener.LaunchListener(generalConfig.EventCollectorFileName, storageApi)
+	ingester.Init(storageApi)
+        listener.LaunchListener(generalConfig.EventCollectorFileName)
 }

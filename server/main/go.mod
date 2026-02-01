@@ -6,6 +6,8 @@ replace distributedlogger.com/listener => ../listener
 
 replace distributedlogger.com/decoder => ../decoder
 
+replace distributedlogger.com/ingester => ../ingester
+
 replace distributedlogger.com/event_decoder => ../../generated/server/event_decoder
 
 require (
@@ -25,6 +27,7 @@ require (
 	distributedlogger.com/config v0.0.0-00010101000000-000000000000 // indirect
 	distributedlogger.com/decoder v0.0.0-00010101000000-000000000000 // indirect
 	distributedlogger.com/event_decoder v0.0.0-00010101000000-000000000000 // indirect
+	distributedlogger.com/ingester v0.0.0-00010101000000-000000000000 // indirect
 	github.com/ClickHouse/ch-go v0.52.1 // indirect
 	github.com/ClickHouse/clickhouse-go/v2 v2.8.0 // indirect
 	github.com/andybalholm/brotli v1.0.5 // indirect

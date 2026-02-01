@@ -9,15 +9,14 @@ import (
 	"strconv"
 	"net"
 	"bytes"
-	"distributedlogger.com/storage"
-	"distributedlogger.com/decoder"
-	"distributedlogger.com/event_decoder"
+	"distributedlogger.com/ingester"
 	"distributedlogger.com/config"
 	"crypto/tls"
 	"crypto/x509"
+	"bufio"
 )
 
-func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
+func handleConnection(conn net.Conn){
         var readBuf []byte
         var headerBuf []byte
         var packetLength uint32
@@ -27,13 +26,13 @@ func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
         fmt.Println("handling connection")
         for{
                 if packetLength == 0{
-                        fmt.Println("read offset ",alreadyRead)
+//                        fmt.Println("read offset ",alreadyRead)
                         numOfBytes, err := conn.Read(headerBuf[alreadyRead:])
                         if err != nil{
                                 fmt.Println("error on read ",err)
                                 break
                         }
-                        fmt.Println("read ",numOfBytes)
+  //                      fmt.Println("read ",numOfBytes,alreadyRead)
                         alreadyRead = alreadyRead + numOfBytes
                         if alreadyRead == 4{
                                 reader := bytes.NewReader(headerBuf)
@@ -43,11 +42,11 @@ func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
 					break
 				}
                                 alreadyRead = 0
-                                //fmt.Println("packet length ",packetLength)
+//                                fmt.Println("packet length ",packetLength)
                                 readBuf = make([]byte, packetLength)
                         }
                 }else{
-			fmt.Println("waiing for data ",alreadyRead, " ",packetLength)
+//			fmt.Println("waiing for data ",alreadyRead, " ",packetLength)
                         if alreadyRead < int(packetLength){
                                 numOfBytes, err := conn.Read(readBuf[alreadyRead:])
                                 if err != nil{
@@ -56,14 +55,7 @@ func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
                                 alreadyRead = alreadyRead + numOfBytes
                                 if alreadyRead == int(packetLength){
                                         if len(readBuf) > 12 {
-						event, decodedThisTime, err := decoder.DecodeUint64(readBuf)
-						if err == nil {
-							fmt.Println("decoding event ",event)
-							event_decoder.Event_dispatch(event, readBuf[decodedThisTime:], storageAPI)
-						}else{
-							fmt.Println("error in decoding ",err)
-							break
-						}
+						ingester.Enqueue(readBuf)
                                         }else{
                                                 fmt.Println("unexpectedly short packet ",len(readBuf))
 						break
@@ -77,7 +69,7 @@ func handleConnection(conn net.Conn, storageAPI storage.StorageAPI){
         defer conn.Close()
 }
 
-func LaunchListener(confPath string, storageAPI storage.StorageAPI){
+func LaunchListener(confPath string){
         jsonFile, err := os.Open(confPath)
         if err != nil{
                 fmt.Println(err)
@@ -137,8 +129,9 @@ func LaunchListener(confPath string, storageAPI storage.StorageAPI){
                         return
                 }
                 fmt.Println("Accepted")
-//              conn.SetReadBuffer(1024*1024*10)
-                go handleConnection(conn, storageAPI)
+		bufio.NewReaderSize(conn,1024*1024*1024)
+		bufio.NewWriterSize(conn,1024*1024*100)
+                go handleConnection(conn)
         }
         defer jsonFile.Close()
 }

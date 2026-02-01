@@ -31,206 +31,220 @@ class GoCodeGen(CodeGen):
         return param[0]
 
     def generate_code(self):
-        # Consider only functions that have at least two params (first is event id)
-        valid_funcs = [f for f in self._func_dict if len(f.get('params', [])) >= 2]
+        # Consider only functions that have at least one param
+        valid_funcs = [f for f in self._func_dict if len(f.get('params', [])) >= 1]
 
+        # Storage enum generation
         self._storage_enum_code = "package storage\n\nconst (\n"
-        self._decoder_code = "package event_decoder\n\n"
-        self._decoder_code += 'import (\n\t"distributedlogger.com/storage"\n\t"errors"\n)\n\n'
-        self._decoder_code += 'import (\n\t"distributedlogger.com/decoder"\n)\n\n'
-        self._storage_definitions_code = ""
-        self._storage_structures_code = ""
-        self._storage_declarations_code = "type StorageAPI interface{\n"
         for idx, f in enumerate(valid_funcs):
-            if len(f['params']) < 2:
-                continue
             event_name = GoCodeGen.get_event_name(f['params'][0])
-            decoder_func = "func decode_" + event_name + \
-                "(packet []byte, s storage.StorageAPI)(error) {\n"
-            decoder_func = decoder_func + "\tvar decoded int = 0\n"
-            decoder_func = decoder_func + "\tvar decodedThisTime int = 0\n"
-            funct = '\t' + f['name'] + "_" + event_name + "("
-            storage_struct = "type " + event_name[0].upper() + \
-                event_name[1:] + "_struct struct {\n"
-            self._storage_definitions_code = self._storage_definitions_code + \
-                "func (s *MongoStorage) " + funct
             entry = '\t' + event_name[0].upper() + event_name[1:]
             if idx == 0:
                 entry += " = iota"
             self._storage_enum_code = self._storage_enum_code + entry + '\n'
-            if idx == len(self._func_dict) - 1:
-                self._storage_enum_code = self._storage_enum_code + ")\n"
-            params = f['params']
-            param_idx = 0
-            funct_body = "\tfields := []interface{}{\n" + '\t\t' + \
-                "storage." + event_name[0].upper() + event_name[1:] + \
-                "_struct{\n"
-            params_array = []
-            for p in params:
+        entry = '\tEventMax'
+        self._storage_enum_code = self._storage_enum_code + entry + '\n'
+        self._storage_enum_code = self._storage_enum_code + ")\n"
+
+        # Storage structures generation
+        self._storage_structures_code = ""
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            struct_name = event_name[0].upper() + event_name[1:] + "_struct"
+            self._storage_structures_code += f"type {struct_name} struct {{\n"
+            
+            for p in f['params']:
+                param_name = p[0]
                 param_type = p[1]
                 if param_type == "uint64_t":
                     param_type = "uint64"
-                funct = funct + p[0] + " " + param_type
-                self._storage_definitions_code = \
-                    self._storage_definitions_code + p[0] + " " + param_type
-                storage_struct = storage_struct + '\t' + p[0][0].upper() + \
-                    p[0][1:] + " " + param_type + '\n'
-                funct_body = funct_body + '\t\t\t' + p[0][0].upper() + \
-                    p[0][1:] + ":" + p[0]
-                param_idx = param_idx + 1
-                if param_idx < len(params):
-                    funct = funct + ", "
-                    self._storage_definitions_code = \
-                        self._storage_definitions_code + ","
-                funct_body = funct_body + ",\n"
-                decoder_func = decoder_func + "\tvar " + p[0] + \
-                    " " + param_type + '\n'
-                if param_idx > 1:
-                    if p[1] == "string":
-                        decoder_func = decoder_func + \
-                            '\t' + p[0] + \
-                            ", decodedThisTime,_ "\
-                            "= decoder.DecodeString(packet[decoded:])" + '\n'
-                    else:
-                        decoder_func = decoder_func + \
-                            '\t' + p[0] + \
-                            ", decodedThisTime,_ "\
-                            "= decoder.DecodeUint64(packet[decoded:])" + '\n'
-                    decoder_func = decoder_func + \
-                        "\tdecoded = decoded + decodedThisTime\n"
-                else:
-                    decoder_func = decoder_func + \
-                        "\t" + p[0] + \
-                        " = storage." + p[0][0].upper() + p[0][1:] + "\n"
+                
+                field_name = param_name[0].upper() + param_name[1:]
+                self._storage_structures_code += f"\t{field_name} {param_type}\n"
+            
+            self._storage_structures_code += "}\n"
 
-            decoder_func = decoder_func + \
-                '\t' + "return s." + f['name'] + "_" + event_name + "("
-            param_idx = 0
-            for p in params:
-                param_idx = param_idx + 1
-                decoder_func = decoder_func + p[0]
-                if param_idx < len(params):
-                    decoder_func = decoder_func + ","
-                else:
-                    decoder_func = decoder_func + ")"
-            decoder_func = decoder_func + "\n}"
-            self._decoder_code = self._decoder_code + decoder_func + '\n'
-            funct = funct + ") (error)"
-            if idx < len(valid_funcs) - 1:
-                funct = funct + '\n'
-            funct_body = funct_body + "\t\t},\n\t}\n"
-            funct_body = funct_body + '\t' + \
-                "_, err := s.collection.InsertOne(context.TODO(), fields)\n"
-            funct_body = funct_body + "\treturn err"
-            self._storage_definitions_code = \
-                self._storage_definitions_code + ") (error){\n"
-            self._storage_definitions_code = \
-                self._storage_definitions_code + funct_body
-            self._storage_definitions_code = \
-                self._storage_definitions_code + "\n}\n"
+        # Storage declarations (interface)
+        self._storage_declarations_code = "type StorageAPI interface{\n\tFlush([][]byte, uint64)(error)\n}\n"
 
-            # Build ClickHouse JSON payload variant — write to a single per-shard table similar to Mongo
-            ch_sig = f"func (s *ClickHouseStorage) {f['name']}_{event_name}("
-            ch_params = []
-            for p in params:
-                pname = p[0]
-                ptype = p[1]
-                if ptype == "uint64_t":
-                    ptype = "uint64"
-                ch_params.append(f"{pname} {ptype}")
+        # Decoder generation
+        self._decoder_code = "package event_decoder\n\n"
+        self._decoder_code += "import (\n"
+        self._decoder_code += '\t"distributedlogger.com/storage"\n'
+        self._decoder_code += ")\n\n"
+        self._decoder_code += "import (\n"
+        self._decoder_code += '\t"distributedlogger.com/decoder"\n'
+        self._decoder_code += ")\n\n"
 
-            ch_sig = ch_sig + ", ".join(ch_params) + ") (error){\n"
-
-            ch_body_lines = []
-            ch_body_lines.append("\tpayload := map[string]interface{}{")
-#            # include EventType for MV filtering
-#            ch_body_lines.append(f"\t\t\"EventType\": \"{event_name}\",")
-            for p in params:
-                if "event" in p[0]:
-                    continue
-                pname = p[0]
-                key = pname[0].upper() + pname[1:]
-                ch_body_lines.append(f"\t\t\"{key}\": {pname},")
-            ch_body_lines.append("\t}")
-            ch_body_lines.append("\tjs, _ := json.Marshal(payload)")
-            ch_body_lines.append("\terr := s.conn.Exec(context.TODO(), fmt.Sprintf(\"INSERT INTO %s (event, payload) VALUES (?,?)\", s.table), "+event_name+", string(js))")
-            ch_body_lines.append("\treturn err")
-            ch_body_lines.append("}\n")
-
-            self._clickhouse_definitions_code = self._clickhouse_definitions_code + ch_sig + "\n".join(ch_body_lines)
-
-            # Generate typed table DDL + materialized view SQL for the event
-            cols: List[str] = []
-            json_extracts: List[str] = []
-            for p in params:
-                if "event" in p[0]:
-                    continue
-                pname = p[0]
-                ptype = p[1]
-                col_name = pname[0].upper() + pname[1:]
-                if ptype == "uint64_t":
-                    ch_type = "UInt64"
-                    json_extracts.append(f"JSONExtractUInt(payload, '{col_name}') AS {col_name}")
-                elif ptype == "string":
-                    ch_type = "String"
-                    json_extracts.append(f"JSONExtractString(payload, '{col_name}') AS {col_name}")
-                elif ptype == "bool":
-                    ch_type = "Bool"
-                    json_extracts.append(f"JSONExtractBool(payload, '{col_name}') AS {col_name}")
-                else:
-                    ch_type = "String"
-                    json_extracts.append(f"JSONExtractString(payload, '{col_name}') AS {col_name}")
-                cols.append(f"{col_name} {ch_type}")
-
-            ddl = f"fmt.Sprintf(\"CREATE TABLE IF NOT EXISTS %s_{event_name} ({', '.join(cols)}) ENGINE = MergeTree() ORDER BY tuple()\", s.table)"
-            event_name_const = event_name[:1].upper() + event_name[1:]
-            mv = f"fmt.Sprintf(\"CREATE MATERIALIZED VIEW IF NOT EXISTS mv_%s_{event_name} TO %s_{event_name} AS SELECT {', '.join(json_extracts)} FROM %s WHERE event = %d\", s.table, s.table, s.table, storage.{event_name_const})"
-
-            # append to migrations method body
-            if not hasattr(self, '_clickhouse_migrations'):
-                self._clickhouse_migrations = []
-            self._clickhouse_migrations.append((ddl, mv))
-            storage_struct = storage_struct + "}\n"
-            self._storage_structures_code = \
-                self._storage_structures_code + storage_struct
-            self._storage_declarations_code = \
-                self._storage_declarations_code + funct
-            if idx == len(valid_funcs) - 1:
-                self._storage_declarations_code = \
-                    self._storage_declarations_code + '\n'
-        self._storage_declarations_code = self._storage_declarations_code + \
-            "}\n"
-        dispatch_funct = "func Event_dispatch(event uint64, "\
-            "packet []byte, s storage.StorageAPI)(error){\n"
-        dispatch_funct = dispatch_funct + "\tswitch event{\n"
         for f in valid_funcs:
             event_name = GoCodeGen.get_event_name(f['params'][0])
-            dispatch_funct = dispatch_funct + \
-                "\tcase storage." + event_name[0].upper() + \
-                event_name[1:] + ":\n"
-            dispatch_funct = dispatch_funct + \
-                "\t\treturn decode_" + \
-                GoCodeGen.get_event_name(f['params'][0]) + "(packet, s)\n"
-        dispatch_funct = dispatch_funct + "\t}\n"
-        dispatch_funct = dispatch_funct + \
-            "\treturn errors.New(\"unknown event\")\n}"
-        self._decoder_code = self._decoder_code + dispatch_funct
+            struct_name = event_name[0].upper() + event_name[1:] + "_struct"
+            
+            # Decoder function signature
+            decoder_func = f"func Decode_{event_name}(packet []byte)(storage.{struct_name}) {{\n"
+            decoder_func += "\tvar decoded int = 0\n"
+            decoder_func += "\tvar decodedThisTime int = 0\n"
+            
+            # Decode each parameter
+            for idx, p in enumerate(f['params']):
+                param_name = p[0]
+                param_type = p[1]
+                
+                if param_type == "uint64_t":
+                    param_type = "uint64"
+                
+                field_name = param_name[0].upper() + param_name[1:]
+                
+                decoder_func += f"\tvar {param_name} {param_type}\n"
+                
+                if idx == 0:
+                    # First parameter is the event ID
+                    decoder_func += f"\t{param_name} = storage.{field_name}\n"
+                else:
+                    # Subsequent parameters are decoded from packet
+                    if p[1] == "string":
+                        decoder_func += f"\t{param_name}, decodedThisTime,_ = decoder.DecodeString(packet[decoded:])\n"
+                    else:
+                        decoder_func += f"\t{param_name}, decodedThisTime,_ = decoder.DecodeUint64(packet[decoded:])\n"
+                    decoder_func += "\tdecoded = decoded + decodedThisTime\n"
+            
+            # Return statement
+            decoder_func += f"\treturn storage.{struct_name}{{\n"
+            for p in f['params']:
+                param_name = p[0]
+                field_name = param_name[0].upper() + param_name[1:]
+                decoder_func += f"\t\t\t{field_name}:{param_name},\n"
+            decoder_func += "\t\t}\n"
+            decoder_func += "}\n"
+            
+            self._decoder_code += decoder_func
 
-        # If migrations were collected, generate a helper method that returns them
-        if hasattr(self, '_clickhouse_migrations') and self._clickhouse_migrations:
-            migrations_lines: List[str] = ["func (s *ClickHouseStorage) GetMigrations() []string {", "\treturn []string{"]
-            for ddl, mv in self._clickhouse_migrations:
-                migrations_lines.append(f"\t\t{ddl},")
-                migrations_lines.append(f"\t\t{mv},")
-            migrations_lines.append("\t}")
-            migrations_lines.append("}")
-            self._clickhouse_definitions_code = self._clickhouse_definitions_code + "\n" + "\n".join(migrations_lines) + "\n"
+        # ClickHouse Flush method generation
+        self._clickhouse_definitions_code = "\n"
+        
+        # Generate Flush method body with switch cases
+        flush_method = "func (s *ClickHouseStorage) Flush(batch [][]byte, event uint64)(error){\n"
+        flush_method += "\tvar err error = nil\n"
+        flush_method += "\tb, err := s.conn.PrepareBatch(context.Background(),\n"
+        flush_method += '\t\tfmt.Sprintf("INSERT INTO %s (event, payload)", s.table))\n'
+        flush_method += "\tif err != nil {\n"
+        flush_method += "\t\tfmt.Println(err)\n"
+        flush_method += "\t\treturn err\n"
+        flush_method += "\t}\n"
+        flush_method += "\tswitch event {\n"
+        
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            struct_name = event_name[0].upper() + event_name[1:] + "_struct"
+            decoder_func_name = f"Decode_{event_name}"
+            
+            flush_method += f"\tcase storage.{struct_name[:-7]}:\n"  # Remove _struct suffix
+            flush_method += f"\t\tfor i := range batch {{\n"
+            flush_method += f"\t\t\t{event_name} := event_decoder.{decoder_func_name}(batch[i])\n"
+            flush_method += "\t\t\tpayload := map[string]interface{}{\n"
+            
+            # Add payload fields (skip first parameter which is event ID)
+            for p in f['params'][1:]:
+                param_name = p[0]
+                field_name = param_name[0].upper() + param_name[1:]
+                flush_method += f"\t\t\t\t\"{field_name}\": {event_name}.{field_name},\n"
+            
+            flush_method += "\t\t\t}\n"
+            flush_method += "\t\t\tjs, _ := json.Marshal(payload)\n"
+            flush_method += f"\t\t\terr = b.Append(uint64(storage.{struct_name[:-7]}), string(js))\n"
+            flush_method += "\t\t\tif err != nil {\n"
+            flush_method += "\t\t\t\tfmt.Println(err)\n"
+            flush_method += "\t\t\t}\n"
+            flush_method += "\t\t}\n"
+            flush_method += "\t\terr = b.Send()\n"
+        
+        flush_method += "\t}\n"
+        flush_method += "\tif err != nil {\n"
+        flush_method += "\t\tfmt.Println(err)\n"
+        flush_method += "\t}\n"
+        flush_method += "\treturn err\n"
+        flush_method += "}\n\n"
+        
+        self._clickhouse_definitions_code += flush_method
+
+        # Generate GetMigrations method
+        migrations_lines: List[str] = ["func (s *ClickHouseStorage) GetMigrations() []string {"]
+        migrations_lines.append("\treturn []string{")
+        
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            struct_name = event_name[0].upper() + event_name[1:] + "_struct"
+            
+            # Collect columns (skip first parameter which is event ID)
+            cols: List[str] = []
+            json_extracts: List[str] = []
+            
+            for p in f['params'][1:]:
+                param_name = p[0]
+                param_type = p[1]
+                field_name = param_name[0].upper() + param_name[1:]
+                
+                if param_type == "uint64_t":
+                    ch_type = "UInt64"
+                    json_extracts.append(f"JSONExtractUInt(payload, '{field_name}') AS {field_name}")
+                elif param_type == "string":
+                    ch_type = "String"
+                    json_extracts.append(f"JSONExtractString(payload, '{field_name}') AS {field_name}")
+                elif param_type == "bool":
+                    ch_type = "Bool"
+                    json_extracts.append(f"JSONExtractBool(payload, '{field_name}') AS {field_name}")
+                else:
+                    ch_type = "String"
+                    json_extracts.append(f"JSONExtractString(payload, '{field_name}') AS {field_name}")
+                
+                cols.append(f"{field_name} {ch_type}")
+            
+            # DDL for typed table
+            cols_str = ", ".join(cols)
+            ddl = f'fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s_{event_name} ({cols_str}) ENGINE = MergeTree() ORDER BY tuple()", s.table),'
+            migrations_lines.append(f"\t\t{ddl}")
+            
+            # Materialized view
+            json_extracts_str = ", ".join(json_extracts)
+            mv = f'fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS mv_%s_{event_name} TO %s_{event_name} AS SELECT {json_extracts_str} FROM %s WHERE event = %d", s.table, s.table, s.table, storage.{struct_name[:-7]})'
+            migrations_lines.append(f"\t\t{mv},")
+        
+        migrations_lines.append("\t}")
+        migrations_lines.append("}")
+        
+        self._clickhouse_definitions_code += "\n".join(migrations_lines) + "\n"
 
     def get_storage_declarations_code(self):
         return self._storage_declarations_code
 
     def get_storage_definitions_code(self):
-        return self._storage_definitions_code
+        # Generate Flush method for Mongo storage
+        valid_funcs = [f for f in self._func_dict if len(f.get('params', [])) >= 1]
+        
+        mongo_flush = "func (s *MongoStorage) Flush(batch [][]byte, event uint64)(error){\n"
+        mongo_flush += "\tvar fields []interface{}\n"
+        mongo_flush += "\tswitch event {\n"
+        
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            struct_name = event_name[0].upper() + event_name[1:] + "_struct"
+            decoder_func_name = f"Decode_{event_name}"
+            
+            mongo_flush += f"\tcase storage.{struct_name[:-7]}:\n"  # Remove _struct suffix
+            mongo_flush += f"\t\tfor _, packet := range batch {{\n"
+            mongo_flush += f"\t\t\tdecoded := event_decoder.{decoder_func_name}(packet)\n"
+            mongo_flush += f"\t\t\tfields = append(fields, decoded)\n"
+            mongo_flush += f"\t\t}}\n"
+        
+        mongo_flush += "\t}\n"
+        mongo_flush += "\tif len(fields) > 0 {\n"
+        mongo_flush += "\t\t_, err := s.collection.InsertMany(context.TODO(), fields)\n"
+        mongo_flush += "\t\treturn err\n"
+        mongo_flush += "\t}\n"
+        mongo_flush += "\treturn nil\n"
+        mongo_flush += "}\n"
+        
+        return mongo_flush
 
     def get_storage_structures_code(self):
         return self._storage_structures_code
@@ -282,7 +296,8 @@ class CppCodeGen(CodeGen):
                 elif p_type == "uint64_t":
                     total_length.append("\ttotal_length += 8;")
 
-            lines.append(f"inline\n{ret} {name}_{name_suffix}({', '.join(params_parts)}) {{")
+            lines.append(f"inline")
+            lines.append(f"{ret} {name}_{name_suffix}({', '.join(params_parts)}) {{")
             lines.extend(total_length)
             lines.append("\tstd::shared_ptr<Buffer> buffer = std::make_shared<Buffer>(total_length);")
             lines.append("\tbuffer->setWriteOffset(4);")
