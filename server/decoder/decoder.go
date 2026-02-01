@@ -33,7 +33,7 @@ func DecodeUint64(packet []byte) (uint64, int, error){
         if err != nil{
                 return 0, 0, err
         }
-	fmt.Println("decoded uint64 ",value)
+//	fmt.Println("decoded uint64 ",value)
         return value, 8, nil
 }
 
@@ -52,7 +52,7 @@ func DecodeString(packet []byte) (string, int, error){
                 return "", 0, errors.New("not enough bytes to decode string")
         }
         value = string(packet[decoded:decoded+int(stringLength)])
-	fmt.Println("decoded string ",value)
+//	fmt.Println("decoded string ",value)
         return value, decoded + int(stringLength), nil
 }
 

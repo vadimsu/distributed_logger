@@ -65,7 +65,7 @@ class GoCodeGen(CodeGen):
             self._storage_structures_code += "}\n"
 
         # Storage declarations (interface)
-        self._storage_declarations_code = "type StorageAPI interface{\n\tFlush([][]byte, uint64)(error)\n}\n"
+        self._storage_declarations_code = "type StorageAPI interface{\n\tFlush([][]byte)(error)\n}\n"
 
         # Decoder generation
         self._decoder_code = "package event_decoder\n\n"
@@ -123,7 +123,7 @@ class GoCodeGen(CodeGen):
         self._clickhouse_definitions_code = "\n"
         
         # Generate Flush method body with switch cases
-        flush_method = "func (s *ClickHouseStorage) Flush(batch [][]byte, event uint64)(error){\n"
+        flush_method = "func (s *ClickHouseStorage) Flush(batch [][]byte)(error){\n"
         flush_method += "\tvar err error = nil\n"
         flush_method += "\tb, err := s.conn.PrepareBatch(context.Background(),\n"
         flush_method += '\t\tfmt.Sprintf("INSERT INTO %s (event, payload)", s.table))\n'
@@ -131,34 +131,39 @@ class GoCodeGen(CodeGen):
         flush_method += "\t\tfmt.Println(err)\n"
         flush_method += "\t\treturn err\n"
         flush_method += "\t}\n"
-        flush_method += "\tswitch event {\n"
+        flush_method += "\tfor i := range batch {\n"
+        flush_method += "\t\tevent, decodedThisTime, err := decoder.DecodeUint64(batch[i])\n"
+        flush_method += "\t\tif err != nil {\n"
+        flush_method += "\t\t\tfmt.Println(err)\n"
+        flush_method += "\t\t\tcontinue\n"
+        flush_method += "\t\t}\n"
+        flush_method += "\t\tswitch event {\n"
         
         for f in valid_funcs:
             event_name = GoCodeGen.get_event_name(f['params'][0])
             struct_name = event_name[0].upper() + event_name[1:] + "_struct"
             decoder_func_name = f"Decode_{event_name}"
             
-            flush_method += f"\tcase storage.{struct_name[:-7]}:\n"  # Remove _struct suffix
-            flush_method += f"\t\tfor i := range batch {{\n"
-            flush_method += f"\t\t\t{event_name} := event_decoder.{decoder_func_name}(batch[i])\n"
-            flush_method += "\t\t\tpayload := map[string]interface{}{\n"
+            flush_method += f"\t\t\tcase storage.{struct_name[:-7]}:\n"  # Remove _struct suffix
+            flush_method += f"\t\t\t\t{event_name} := event_decoder.{decoder_func_name}(batch[i][decodedThisTime:])\n"
+            flush_method += "\t\t\t\tpayload := map[string]interface{}{\n"
             
             # Add payload fields (skip first parameter which is event ID)
             for p in f['params'][1:]:
                 param_name = p[0]
                 field_name = param_name[0].upper() + param_name[1:]
-                flush_method += f"\t\t\t\t\"{field_name}\": {event_name}.{field_name},\n"
+                flush_method += f"\t\t\t\t\t\"{field_name}\": {event_name}.{field_name},\n"
             
-            flush_method += "\t\t\t}\n"
-            flush_method += "\t\t\tjs, _ := json.Marshal(payload)\n"
-            flush_method += f"\t\t\terr = b.Append(uint64(storage.{struct_name[:-7]}), string(js))\n"
-            flush_method += "\t\t\tif err != nil {\n"
-            flush_method += "\t\t\t\tfmt.Println(err)\n"
-            flush_method += "\t\t\t}\n"
-            flush_method += "\t\t}\n"
-            flush_method += "\t\terr = b.Send()\n"
+            flush_method += "\t\t\t\t}\n"
+            flush_method += "\t\t\t\tjs, _ := json.Marshal(payload)\n"
+            flush_method += f"\t\t\t\terr = b.Append(uint64(storage.{struct_name[:-7]}), string(js))\n"
+            flush_method += "\t\t\t\tif err != nil {\n"
+            flush_method += "\t\t\t\t\tfmt.Println(err)\n"
+            flush_method += "\t\t\t\t}\n"
         
+        flush_method += "\t\t}\n"
         flush_method += "\t}\n"
+        flush_method += "\terr = b.Send()\n"
         flush_method += "\tif err != nil {\n"
         flush_method += "\t\tfmt.Println(err)\n"
         flush_method += "\t}\n"
@@ -221,21 +226,25 @@ class GoCodeGen(CodeGen):
         # Generate Flush method for Mongo storage
         valid_funcs = [f for f in self._func_dict if len(f.get('params', [])) >= 1]
         
-        mongo_flush = "func (s *MongoStorage) Flush(batch [][]byte, event uint64)(error){\n"
+        mongo_flush = "func (s *MongoStorage) Flush(batch [][]byte)(error){\n"
         mongo_flush += "\tvar fields []interface{}\n"
-        mongo_flush += "\tswitch event {\n"
+        mongo_flush += "\tfor _, packet := range batch {\n"
+        mongo_flush += "\t\tevent, decodedThisTime, err := decoder.DecodeUint64(packet)\n"
+        mongo_flush += "\t\tif err != nil {\n"
+        mongo_flush += "\t\t\treturn err\n"
+        mongo_flush += "\t\t}\n"
+        mongo_flush += "\t\tswitch event {\n"
         
         for f in valid_funcs:
             event_name = GoCodeGen.get_event_name(f['params'][0])
             struct_name = event_name[0].upper() + event_name[1:] + "_struct"
             decoder_func_name = f"Decode_{event_name}"
             
-            mongo_flush += f"\tcase storage.{struct_name[:-7]}:\n"  # Remove _struct suffix
-            mongo_flush += f"\t\tfor _, packet := range batch {{\n"
-            mongo_flush += f"\t\t\tdecoded := event_decoder.{decoder_func_name}(packet)\n"
+            mongo_flush += f"\t\tcase storage.{struct_name[:-7]}:\n"  # Remove _struct suffix
+            mongo_flush += f"\t\t\tdecoded := event_decoder.{decoder_func_name}(packet[decodedThisTime:])\n"
             mongo_flush += f"\t\t\tfields = append(fields, decoded)\n"
-            mongo_flush += f"\t\t}}\n"
         
+        mongo_flush += "\t\t}\n"
         mongo_flush += "\t}\n"
         mongo_flush += "\tif len(fields) > 0 {\n"
         mongo_flush += "\t\t_, err := s.collection.InsertMany(context.TODO(), fields)\n"
