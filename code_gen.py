@@ -76,47 +76,60 @@ class GoCodeGen(CodeGen):
         self._decoder_code += '\t"distributedlogger.com/decoder"\n'
         self._decoder_code += ")\n\n"
 
-        for f in valid_funcs:
+        for fidx, f in enumerate(valid_funcs):
             event_name = GoCodeGen.get_event_name(f['params'][0])
             struct_name = event_name[0].upper() + event_name[1:] + "_struct"
-            
-            # Decoder function signature
-            decoder_func = f"func Decode_{event_name}(packet []byte)(storage.{struct_name}) {{\n"
+
+            # Decoder function signature (returns struct and error)
+            # Match reference formatting: first function has space before '{', subsequent functions do not
+            if fidx == 0:
+                decoder_func = f"func Decode_{event_name}(packet []byte)(storage.{struct_name}, error) {{\n"
+            else:
+                decoder_func = f"func Decode_{event_name}(packet []byte)(storage.{struct_name}, error){{\n"
             decoder_func += "\tvar decoded int = 0\n"
             decoder_func += "\tvar decodedThisTime int = 0\n"
-            
+
             # Decode each parameter
             for idx, p in enumerate(f['params']):
                 param_name = p[0]
                 param_type = p[1]
-                
+
                 if param_type == "uint64_t":
                     param_type = "uint64"
-                
+
                 field_name = param_name[0].upper() + param_name[1:]
-                
+
                 decoder_func += f"\tvar {param_name} {param_type}\n"
-                
+
                 if idx == 0:
                     # First parameter is the event ID
                     decoder_func += f"\t{param_name} = storage.{field_name}\n"
                 else:
-                    # Subsequent parameters are decoded from packet
+                    # Subsequent parameters are decoded from packet and errors checked
                     if p[1] == "string":
-                        decoder_func += f"\t{param_name}, decodedThisTime,_ = decoder.DecodeString(packet[decoded:])\n"
+                        if idx == 1:
+                            decoder_func += f"\t{param_name}, decodedThisTime, err := decoder.DecodeString(packet[decoded:])\n"
+                        else:
+                            decoder_func += f"\t{param_name}, decodedThisTime, err = decoder.DecodeString(packet[decoded:])\n"
                     else:
-                        decoder_func += f"\t{param_name}, decodedThisTime,_ = decoder.DecodeUint64(packet[decoded:])\n"
+                        if idx == 1:
+                            decoder_func += f"\t{param_name}, decodedThisTime, err := decoder.DecodeUint64(packet[decoded:])\n"
+                        else:
+                            decoder_func += f"\t{param_name}, decodedThisTime, err = decoder.DecodeUint64(packet[decoded:])\n"
+                    decoder_func += "\tif err != nil {\n"
+                    decoder_func += f"\t\treturn storage.{struct_name}{{}}, err\n"
+                    decoder_func += "\t}\n"
                     decoder_func += "\tdecoded = decoded + decodedThisTime\n"
-            
-            # Return statement
+
+            # Return statement with nil error
             decoder_func += f"\treturn storage.{struct_name}{{\n"
             for p in f['params']:
                 param_name = p[0]
                 field_name = param_name[0].upper() + param_name[1:]
                 decoder_func += f"\t\t\t{field_name}:{param_name},\n"
-            decoder_func += "\t\t}\n"
+            decoder_func += "\t\t}, nil\n"
             decoder_func += "}\n"
-            
+
             self._decoder_code += decoder_func
 
         # ClickHouse Flush method generation
@@ -145,7 +158,10 @@ class GoCodeGen(CodeGen):
             decoder_func_name = f"Decode_{event_name}"
             
             flush_method += f"\t\t\tcase storage.{struct_name[:-7]}:\n"  # Remove _struct suffix
-            flush_method += f"\t\t\t\t{event_name} := event_decoder.{decoder_func_name}(batch[i][decodedThisTime:])\n"
+            flush_method += f"\t\t\t\t{event_name}, err := event_decoder.{decoder_func_name}(batch[i][decodedThisTime:])\n"
+            flush_method += "\t\t\t\tif err != nil {\n"
+            flush_method += "\t\t\t\t\treturn err\n"
+            flush_method += "\t\t\t\t}\n"
             flush_method += "\t\t\t\tpayload := map[string]interface{}{\n"
             
             # Add payload fields (skip first parameter which is event ID)
@@ -235,13 +251,20 @@ class GoCodeGen(CodeGen):
         mongo_flush += "\t\t}\n"
         mongo_flush += "\t\tswitch event {\n"
         
-        for f in valid_funcs:
+        for fidx, f in enumerate(valid_funcs):
             event_name = GoCodeGen.get_event_name(f['params'][0])
             struct_name = event_name[0].upper() + event_name[1:] + "_struct"
             decoder_func_name = f"Decode_{event_name}"
             
             mongo_flush += f"\t\tcase storage.{struct_name[:-7]}:\n"  # Remove _struct suffix
-            mongo_flush += f"\t\t\tdecoded := event_decoder.{decoder_func_name}(packet[decodedThisTime:])\n"
+            # Reference has inconsistent spacing: first event uses 'decoded,err', second uses 'decoded, err'
+            if fidx == 0:
+                mongo_flush += f"\t\t\tdecoded,err := event_decoder.{decoder_func_name}(packet[decodedThisTime:])\n"
+            else:
+                mongo_flush += f"\t\t\tdecoded, err := event_decoder.{decoder_func_name}(packet[decodedThisTime:])\n"
+            mongo_flush += "\t\t\tif err != nil {\n"
+            mongo_flush += "\t\t\t\treturn err\n"
+            mongo_flush += "\t\t\t}\n"
             mongo_flush += f"\t\t\tfields = append(fields, decoded)\n"
         
         mongo_flush += "\t\t}\n"
