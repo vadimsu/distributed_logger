@@ -4,9 +4,13 @@ import (
 	"distributedlogger.com/storage"
 	"fmt"
 	"time"
+	"runtime"
 )
 
 var channels []chan []byte
+var workerIdx int = 0
+var numberOfWorkers int = 0
+var workersBufferSize int = 1024
 
 func workerMain(s storage.StorageAPI, ch chan []byte){
 	var batch [][]byte
@@ -21,7 +25,7 @@ func workerMain(s storage.StorageAPI, ch chan []byte){
 				return
 			}
 			batch = append(batch, ev)
-			if len(batch) >= 1024 {
+			if len(batch) >= workersBufferSize {
 				err := s.Flush(batch)
 				if err != nil {
 					fmt.Println(err)
@@ -41,20 +45,26 @@ func workerMain(s storage.StorageAPI, ch chan []byte){
 	}
 }
 
-func Init(s storage.StorageAPI){
-	for i := 0;i < 10;i++ {
-		ch := make(chan []byte, 1024)
+func Init(s storage.StorageAPI, workers int, bufferSize int){
+	if workers > 0 {
+		numberOfWorkers = workers
+	}else{
+		numberOfWorkers = runtime.NumCPU()
+	}
+	if bufferSize > 0 {
+		workersBufferSize = bufferSize
+	}
+	for i := 0;i < numberOfWorkers;i++ {
+		ch := make(chan []byte, workersBufferSize)
 		channels = append(channels, ch)
 		go workerMain(s, ch)
 	}
 }
 
-var workerIdx int = 0
-
 func Enqueue(msg []byte){
 	channels[workerIdx] <- msg
 	workerIdx = workerIdx + 1
-	if workerIdx == 10 {
+	if workerIdx == numberOfWorkers {
 		workerIdx = 0
 	}
 }

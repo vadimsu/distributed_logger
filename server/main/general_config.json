@@ -1,4 +1,6 @@
 {
-	"StorageConfigFileName":"storage_config.json",
-        "EventCollectorFileName":"event_collector_no_tls.json"
+	"StorageConfigFileName":"storage_config_mongo.json",
+        "EventCollectorFileName":"event_collector.json",
+	"NumberOfWorkers": 10,
+	"WorkersBufferSize":2048
 }

@@ -26,6 +26,8 @@ type StorageConfig struct{
 type GeneralConfig struct{
         StorageConfigFileName string `json:"StorageConfigFileName"`
         EventCollectorFileName string `json:"EventCollectorFileName"`
+	NumberOfWorkers int `json:"NumberOfWorkers"`
+	WorkersBufferSize int `json:"WorkersBufferSize"`
 }
 
 func main(){
@@ -75,6 +77,6 @@ func main(){
                         return
                 }
         }
-	ingester.Init(storageApi)
+	ingester.Init(storageApi, generalConfig.NumberOfWorkers, generalConfig.WorkersBufferSize)
         listener.LaunchListener(generalConfig.EventCollectorFileName)
 }
