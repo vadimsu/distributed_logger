@@ -203,4 +203,12 @@ See CONTRIBUTING.md.
 
 **License**
 
+This project is licensed under the Apache License 2.0.
+
+You are free to use, modify, and distribute this software, including in commercial products.
+
+The license includes an explicit patent grant from contributors, which helps protect users and adopters of the project.
+
+See the LICENSE file for full details.
+
 
