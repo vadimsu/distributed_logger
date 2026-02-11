@@ -87,14 +87,15 @@ It is optimized for **structured event capture and post-analysis.**
 
 **Architecture Overview**
 ```mermaid
-flowchart TB;
-  A{"Client Process (C++, Seastar/POSIX)"}-- Generated Logging API---B{"Event Encoder (Serializes parameters + builds wire payload)"}
-  B-- TLS/TCP transport---C{"Listener (Server)"}
-  C-->D{"Parser (framing, extracts event ID)"}
-  D-- Channel (Go) ---E{"Worker"}
-  E-->F{"Event decoder (generated) + dispatch (calling corresponding generated storage's API"}
-  F-->S{"Storage API (Mongo, ClickHouse, a pluggable backend)"}
-  
+flowchart TD
+
+A[Client Application] --> B[Generated Encoder]
+B --> C[TCP/TLS Transport]
+C --> D[Listener Server]
+D --> E[Frame Reader]
+E --> F[Generated Decoder]
+F --> G[Storage Adapter]
+G --> H[MongoDB / ClickHouse]
 ```
 
 **Design Principle**
