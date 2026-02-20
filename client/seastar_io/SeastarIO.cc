@@ -91,7 +91,9 @@ seastar::future<> SeastarIO::disconnect() noexcept {
 }
 
 std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> buffer) noexcept {
-	if (_queuemaxsize != 0 && _queuesize + buffer->getCapacity() > _queuemaxsize){
+	auto buf = static_pointer_cast<SeastarBuffer>(buffer);
+	auto seastar_buf = buf->getBuffer();
+	if (_queuemaxsize != 0 && _queuesize + /*buffer->getCapacity()*/seastar_buf.size() > _queuemaxsize){
 		_logDroppedCnt++;
 		return nullptr;
 	}
@@ -99,12 +101,12 @@ std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> 
 		return nullptr;
 	}
 	_logPostedCnt++;
-	uint32_t length = buffer->getCapacity() - 4;
+	uint32_t length = /*buffer->getCapacity()*/seastar_buf.size() - 4;
         length = htonl(length);
-        memcpy(buffer->getData(), &length, sizeof(length));
-	auto buf = static_pointer_cast<SeastarBuffer>(buffer);
-	_wqueue.push_back(std::move(buf->getBuffer()));
-	_queuesize += ntohl(length) + 4;
+        memcpy(/*buffer->getData()*/seastar_buf.get_write(), &length, sizeof(length));
+	_queuesize += /*buf->getBuffer()*/seastar_buf.size();
+	_wqueue.push_back(std::move(/*buf->getBuffer()*/seastar_buf));
+//	_queuesize += ntohl(length) + 4;
 	if (_transmitting || !_connected){
 		return nullptr;
 	}

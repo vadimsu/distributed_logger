@@ -100,7 +100,7 @@ def get_parameters(f):
 
 
 print("parsing ", sys.argv[1])
-project_root = "../"
+project_root = "./"
 if len(sys.argv) > 2:
     project_root = sys.argv[2]
 print("project root is at ",project_root)
