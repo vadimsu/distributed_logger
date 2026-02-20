@@ -7,8 +7,7 @@ import (
 	"runtime"
 )
 
-var channels []chan []byte
-var workerIdx int = 0
+var channel chan []byte
 var numberOfWorkers int = 0
 var workersBufferSize int = 1024
 
@@ -54,17 +53,12 @@ func Init(s storage.StorageAPI, workers int, bufferSize int){
 	if bufferSize > 0 {
 		workersBufferSize = bufferSize
 	}
+	channel = make(chan []byte, workersBufferSize)
 	for i := 0;i < numberOfWorkers;i++ {
-		ch := make(chan []byte, workersBufferSize)
-		channels = append(channels, ch)
-		go workerMain(s, ch)
+		go workerMain(s, channel)
 	}
 }
 
 func Enqueue(msg []byte){
-	channels[workerIdx] <- msg
-	workerIdx = workerIdx + 1
-	if workerIdx == numberOfWorkers {
-		workerIdx = 0
-	}
+	channel <- msg
 }

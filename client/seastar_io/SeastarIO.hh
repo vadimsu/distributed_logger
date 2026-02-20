@@ -11,15 +11,24 @@ namespace distributed_logger {
 
 class SeastarIO : public IIO{
         public:
-		SeastarIO(const seastar::sstring&, unsigned int);
-		virtual ~SeastarIO();
-                virtual std::shared_ptr<IBufferWrapper> send(std::shared_ptr<IBufferWrapper>) override;
-		virtual void connect();
-		virtual bool isConnected(){ return _connected; }
-		virtual seastar::future<> disconnect();
+		SeastarIO(const seastar::sstring&, unsigned int) noexcept;
+		virtual ~SeastarIO() noexcept ;
+		SeastarIO(const SeastarIO&) = delete;
+		SeastarIO(SeastarIO&&) = delete;
+		SeastarIO& operator=(const SeastarIO&) = delete;
+		SeastarIO& operator=(SeastarIO&&) = delete;
+                virtual std::shared_ptr<IBufferWrapper> send(std::shared_ptr<IBufferWrapper>) noexcept override;
+		void setQueueMaxSize(size_t queuesize) noexcept override { _queuemaxsize = queuesize; }
+		virtual size_t QueueSize() noexcept override { return _queuesize; }
+		uint64_t getLogsPostedCount() noexcept override { return _logPostedCnt; }
+		uint64_t getLogsDroppedCount() noexcept override { return _logDroppedCnt; }
+		uint64_t getLogsSentCount() noexcept override { return _logSentCnt; }
+		virtual void connect() noexcept;
+		virtual bool isConnected() noexcept { return _connected; }
+		virtual seastar::future<> disconnect() noexcept;
 	protected:
-		virtual void reconnect();
-		void initializeConnectedSocket(seastar::connected_socket);
+		virtual void reconnect() noexcept;
+		void initializeConnectedSocket(seastar::connected_socket) noexcept;
 		seastar::timer<> _reconnect_timer;
 		seastar::socket_address _address;
 	private:
@@ -30,6 +39,12 @@ class SeastarIO : public IIO{
 		bool _connected;
 		bool _transmitting;
 		seastar::future<> _tx_finished;
+		size_t _queuemaxsize;
+		size_t _queuesize;
+		uint64_t _logPostedCnt;
+		uint64_t _logDroppedCnt;
+		uint64_t _logSentCnt;
+		bool _shutting_down;
 };
 
 }

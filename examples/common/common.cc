@@ -7,7 +7,7 @@
 using namespace std;
 namespace po = boost::program_options;
 
-int get_common_options(int argc, char** argv, uint64_t& time_to_run_sec, string& certificate, string& key, string& trusted, string& host, uint16_t& port){
+int get_common_options(int argc, char** argv, LoopParams& loop_params){
 	try {
 		po::options_description desc("Allowed options");
 		desc.add_options()
@@ -17,7 +17,8 @@ int get_common_options(int argc, char** argv, uint64_t& time_to_run_sec, string&
 			("key", po::value<string>()->default_value(""), "TLS key file path")
 			("trusted", po::value<string>()->default_value(""), "TLS root certificate file path (for self-signed)")
 			("host", po::value<string>()->default_value("127.0.0.1"), "Log server's IP address")
-			("port", po::value<uint16_t>()->default_value(7777), "Log server's port");
+			("port", po::value<uint16_t>()->default_value(7777), "Log server's port")
+			("size", po::value<size_t>()->default_value(0), "Logging queue size (in bytes). 0 means unlimited");
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, desc), vm);
 		po::notify(vm);
@@ -26,22 +27,25 @@ int get_common_options(int argc, char** argv, uint64_t& time_to_run_sec, string&
 			return 2;
 		}
 		if (vm.count("time")) {
-			time_to_run_sec = vm["time"].as<int>();
+			loop_params.time_to_run_sec = vm["time"].as<int>();
 		}
 		if (vm.count("certificate")){
-			certificate = vm["certificate"].as<string>();
+			loop_params.certificate = vm["certificate"].as<string>();
 		}
 		if (vm.count("key")){
-			key = vm["key"].as<string>();
+			loop_params.key = vm["key"].as<string>();
 		}
 		if (vm.count("trusted")){
-			trusted = vm["trusted"].as<string>();
+			loop_params.trusted = vm["trusted"].as<string>();
 		}
 		if (vm.count("host")){
-			trusted = vm["host"].as<string>();
+			loop_params.logserverhost = vm["host"].as<string>();
 		}
 		if (vm.count("port")){
-			port = vm["port"].as<uint16_t>();
+			loop_params.logserverport = vm["port"].as<uint16_t>();
+		}
+		if (vm.count("size")){
+			loop_params.queuesize = vm["size"].as<size_t>();
 		}
 	}catch(std::exception& e){
 		cerr << "error: " << e.what() <<endl;

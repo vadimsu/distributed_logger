@@ -32,7 +32,7 @@ target_link_libraries (
 	ssl
 	boost_program_options
 )
-
+target_compile_options(simple_logging PRIVATE -O3)
 set_target_properties(simple_logging
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

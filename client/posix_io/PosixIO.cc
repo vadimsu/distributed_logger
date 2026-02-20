@@ -11,7 +11,7 @@
 
 using namespace distributed_logger;
 
-void PosixIO::initialize_connection(){
+void PosixIO::initialize_connection() noexcept {
         if (_cert == "" || _key == "") {
                 char buf[1024];
                 struct hostent host_entry[2];
@@ -133,22 +133,27 @@ void PosixIO::initialize_connection(){
         syslog(LOG_INFO,"Connected to centralized logging %s",_remoteHost.c_str());
 }
 
-PosixIO::PosixIO(std::string remoteHost, uint16_t port, std::string&& certificate, std::string&& key, std::string&& trusted): _remoteHost(remoteHost), _port(port), _cert(certificate), _key(key), _trusted(trusted), _fd(-1), _ssl(NULL), _connected(false), _asyncMode(false){
+PosixIO::PosixIO(std::string remoteHost, uint16_t port, std::string&& certificate, std::string&& key, std::string&& trusted) noexcept: _remoteHost(remoteHost), _port(port), _cert(certificate), _key(key), _trusted(trusted), _fd(-1), _ssl(NULL), _connected(false), _asyncMode(false), _queuemaxsize(0), _queuesize(0), _logPostedCnt(0), _logDroppedCnt(0), _logSentCnt(0){
         initialize_connection();
 }
 
-PosixIO::~PosixIO(){
+PosixIO::~PosixIO() noexcept{
         if (_ssl != NULL){
                 OPENSSL_free(_ssl);
                 _ssl = NULL;
         }
 }
 
-std::shared_ptr<IBufferWrapper> PosixIO::send(std::shared_ptr<IBufferWrapper> buf){
+std::shared_ptr<IBufferWrapper> PosixIO::send(std::shared_ptr<IBufferWrapper> buf) noexcept {
+	if (_queuemaxsize != 0 && _queuesize + buf->getCapacity() > _queuemaxsize){
+		_logDroppedCnt++;
+		return buf;
+	}
+	_logPostedCnt++;
         uint32_t length = buf->getCapacity() - 4;
-	std::cout<<"Sending "<<buf->getCapacity()<<std::endl;
         length = htonl(length);
         memcpy(buf->getData(), &length, sizeof(length));
+	_queuesize += buf->getCapacity();
 	if (_asyncMode){
 		_queue.push_back(buf);
 		return nullptr;
@@ -165,6 +170,8 @@ std::shared_ptr<IBufferWrapper> PosixIO::send(std::shared_ptr<IBufferWrapper> bu
         }
         if (written > 0){
                 buf->setReadOffset(buf->getReadOffset() + written);
+		_queuesize -= (written >= _queuesize ? _queuesize : written);
+		_logSentCnt += buf->getReadOffset() == buf->getCapacity();
         }else{
                 if (errno != 0){
                         initialize_connection();
@@ -179,7 +186,7 @@ std::shared_ptr<IBufferWrapper> PosixIO::send(std::shared_ptr<IBufferWrapper> bu
         return nullptr;
 }
 
-void PosixIO::onWriteOpportunity(){
+void PosixIO::onWriteOpportunity() noexcept {
         while (!_queue.empty()){
 //repeat:
                 auto buf = _queue.front();
@@ -191,15 +198,17 @@ void PosixIO::onWriteOpportunity(){
 		}
                 if (written > 0){
                         buf->setReadOffset(buf->getReadOffset() + written);
+			_queuesize -= (written >= _queuesize ? _queuesize : written);
                 }else if (written == -1){
                         if (errno != 0){
                                 initialize_connection();
-                                syslog(LOG_ERR,"Cannot send log message %d %s",written,strerror(errno));
+                                syslog(LOG_ERR,"Cannot send log message %ld %s",written,strerror(errno));
                         }
 			break;
                 }
                 if (buf->getReadOffset() == buf->getCapacity()){
                         _queue.pop_front();
+			_logSentCnt++;
                 }else{
 			break;
                 }

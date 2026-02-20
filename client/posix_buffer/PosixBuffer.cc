@@ -9,7 +9,6 @@ PosixBuffer::PosixBuffer(size_t size){
         _readOffset = 0;
         _writeOffset = 0;
 	_size = size;
-	std::cout<<"allocating buf "<<size<<std::endl;
         _buffer = (char*)calloc(1,_size);
 }
 
@@ -38,7 +37,6 @@ size_t PosixBuffer::writeData(const char* data, size_t size){
 	if (_size <= size + _writeOffset){
 		size = _size - _writeOffset;
 	}
-	std::cout<<"writing  "<<size<<" at "<<_writeOffset<<std::endl;
         memcpy(_buffer + _writeOffset, data, size);
         _writeOffset += size;
         return size;

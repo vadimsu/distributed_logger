@@ -9,7 +9,6 @@ using namespace distributed_logger;
 SeastarBuffer::SeastarBuffer(size_t size){
         _readOffset = 0;
         _writeOffset = 0;
-	std::cout<<"allocating buf "<<size<<std::endl;
         _buffer = seastar::temporary_buffer<char>(size);
 }
 
@@ -37,7 +36,6 @@ size_t SeastarBuffer::writeData(const char* data, size_t size){
 	if (_buffer.size() <= size + _writeOffset){
 		size = _buffer.size() - _writeOffset;
 	}
-	std::cout<<"writing  "<<size<<" at "<<_writeOffset<<std::endl;
         memcpy(_buffer.get_write() + _writeOffset, data, size);
         _writeOffset += size;
         return size;

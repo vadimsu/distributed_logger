@@ -10,17 +10,23 @@
 
 using namespace distributed_logger;
 
-SeastarIO::SeastarIO(const seastar::sstring& ip, unsigned int port): _tx_finished(seastar::make_ready_future<>()){
+SeastarIO::SeastarIO(const seastar::sstring& ip, unsigned int port) noexcept: _tx_finished(seastar::make_ready_future<>()){
 	seastar::net::inet_address in(seastar::sstring(ip.data(), ip.size()));
-        _address = seastar::make_ipv4_address({in, port});
+        _address = seastar::make_ipv4_address({in, static_cast<uint16_t>(port)});
 	_connected = false;
 	_transmitting = false;
+	_queuemaxsize = 0;
+	_queuesize = 0;
+	_logPostedCnt = 0;
+	_logDroppedCnt = 0;
+	_logSentCnt = 0;
+	_shutting_down = false;
 }
 
-SeastarIO::~SeastarIO(){
+SeastarIO::~SeastarIO() noexcept {
 }
 
-void SeastarIO::initializeConnectedSocket(seastar::connected_socket fd){
+void SeastarIO::initializeConnectedSocket(seastar::connected_socket fd) noexcept{
 	seastar::net::keepalive_params kap;
 	std::chrono::seconds idleDuration(1);
 	std::chrono::seconds interval(5);
@@ -30,18 +36,18 @@ void SeastarIO::initializeConnectedSocket(seastar::connected_socket fd){
 	fd.set_keepalive_parameters(kap);
 	fd.set_keepalive(true);
 	_socket = std::move(fd);
-	_in = std::move(_socket.input());
-	_out = std::move(_socket.output());
+	_in = _socket.input();
+	_out = _socket.output();
 	_connected = true;
 }
 
-void SeastarIO::reconnect(){
+void SeastarIO::reconnect() noexcept {
 	if (_reconnect_timer.armed()){
 		return;
 	}
 	std::chrono::seconds reconnectDuration(1);
 	_reconnect_timer.set_callback([this] {
-		seastar::connect(_address).then([this](seastar::connected_socket fd){
+		(void)seastar::connect(_address).then([this](seastar::connected_socket fd){
 			initializeConnectedSocket(std::move(fd));
 		}).handle_exception([this](std::exception_ptr e){
 			reconnect();
@@ -50,15 +56,18 @@ void SeastarIO::reconnect(){
 	_reconnect_timer.arm(reconnectDuration);
 }
 
-void SeastarIO::connect(){
+void SeastarIO::connect() noexcept {
        reconnect();
 }
 
-seastar::future<> SeastarIO::disconnect(){
+seastar::future<> SeastarIO::disconnect() noexcept {
 	if (!_connected){
 		return seastar::make_ready_future<>();
 	}
+	_shutting_down = true;
 	return _tx_finished.then([this]{
+		_socket.shutdown_output();
+		_socket.shutdown_input();
 		auto out_fut = _out.close();
 		auto in_fut = _in.close();
 		return seastar::when_all(std::move(out_fut), std::move(in_fut)).then([this](auto futs){
@@ -81,29 +90,41 @@ seastar::future<> SeastarIO::disconnect(){
 	});
 }
 
-std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> buffer){
+std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> buffer) noexcept {
+	if (_queuemaxsize != 0 && _queuesize + buffer->getCapacity() > _queuemaxsize){
+		_logDroppedCnt++;
+		return nullptr;
+	}
+	if (_shutting_down || !_connected){
+		return nullptr;
+	}
+	_logPostedCnt++;
 	uint32_t length = buffer->getCapacity() - 4;
         length = htonl(length);
         memcpy(buffer->getData(), &length, sizeof(length));
 	auto buf = static_pointer_cast<SeastarBuffer>(buffer);
 	_wqueue.push_back(std::move(buf->getBuffer()));
+	_queuesize += ntohl(length) + 4;
 	if (_transmitting || !_connected){
 		return nullptr;
 	}
 	_transmitting = true;
         _tx_finished = std::move(seastar::do_until([this] {
-		if (_wqueue.empty() || !_connected){
+		if (_wqueue.empty() || !_connected || _shutting_down){
 			_transmitting = false;
 			return true;
 		}
 		return false;
 	},
 	[this] {
-		return _out.write(std::move(_wqueue.front().share())).then([this] () mutable {
-			if (!_wqueue.empty())
-				_wqueue.pop_front();
+		auto bufsize = _wqueue.front().size();
+		auto buf = std::move(_wqueue.front());
+		_wqueue.pop_front();
+		return _out.write(std::move(buf)).then([this, bufsize] () mutable {
+			_queuesize -= (bufsize >= _queuesize ? _queuesize : bufsize);
+			_logSentCnt++;
 			if (_wqueue.empty()){
-				return _out.flush();
+				 return _out.flush();
 			}
 			return seastar::make_ready_future<>();
 		}).handle_exception([this](std::exception_ptr e) mutable{

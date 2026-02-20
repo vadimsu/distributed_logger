@@ -12,11 +12,11 @@ namespace distributed_logger {
 
 class SeastarTLS_IO : public SeastarIO{
         public:
-		SeastarTLS_IO(const seastar::sstring&, unsigned int, const seastar::sstring&, const seastar::sstring&, const seastar::sstring&);
+		SeastarTLS_IO(const seastar::sstring&, unsigned int, const seastar::sstring&, const seastar::sstring&, const seastar::sstring&) noexcept;
 	protected:
-		void reconnect() override;
+		void reconnect() noexcept override;
 	private:
-		seastar::future<seastar::shared_ptr<seastar::tls::certificate_credentials>> buildClientCredentials();
+		seastar::future<seastar::shared_ptr<seastar::tls::certificate_credentials>> buildClientCredentials() noexcept;
 		seastar::sstring _certificate;
 		seastar::sstring _key;
 		seastar::sstring _trusted;

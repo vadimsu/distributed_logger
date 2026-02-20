@@ -7,6 +7,7 @@ project(examples)
 #find_package (Valgrind)
 
 include_directories(
+	../common
         ../../client/api
         ../../client/api/iio
         ../../client/api/buffer
@@ -33,7 +34,7 @@ target_link_libraries (
 	crypto
 	ssl
 )
-
+set(CMAKE_CXX_FLAGS "-O3")
 set_target_properties(seastar_app_logging
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
