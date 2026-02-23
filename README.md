@@ -114,24 +114,127 @@ Example event definition:
 
  `void LogEvent(uint64_t event1, uint64_t shard, std::string host, uint64_t timestamp);`
 
-2. **Run Code Generator**
+2. **Generate Client & Server Code**
 
-`python generator.py --input event_api.hh`
+From the project root:
 
+`./tools/run_parser.sh ./examples/example_header.hh`
 
-Generated components include:
+This will:
 
-* Client encoders
+* Parse the event schema in example_header.hh
 
-* Server decoders
+* Generate client encoders
 
-* Storage adapters
+* Generate server decoders
+
+* Generate storage bindings
+
+**Generated Client Code**
+
+Generated client implementation:
+
+`generated/client/distributed_logger_api_int.hh`
+
+This file is included by:
+
+`client/api/LogAPIs.hh`
+
+When using example_header.hh, the generated file will contain:
+
+`Logger::LogEvent_event0(...)`
+`Logger::LogEvent_event1(...)`
+
+These are strongly typed member functions of the Logger class corresponding to the declared events.
 
 3. **Start Server**
+ 
+From the project root:
 
-`go run server/main.go --config config.json`
+`cd server/main`
 
-5. **Log Events From Client**
+`go run . general_config.json`
+
+Alternatively:
+
+`cd server/main`
+
+`go build .`
+
+`./main general_config.json`
+
+The server will:
+
+* Start TCP listener
+
+* Initialize configured storage backend
+
+* Spawn worker pool
+
+* Begin accepting client connections
+
+Make sure your `general_config.json` matches your storage configuration.
+
+5. **Run Example Clients**
+
+After the server is running, you can launch one of the example clients.
+
+**Synchronous Client (Blocking)**
+
+`./simple_logging/bin/simple_logging <options>`
+
+Characteristics:
+
+* Uses blocking socket calls
+
+* Applies natural backpressure
+
+* LogEvent() may block under load
+
+**Epoll-based Client (Async)**
+
+`./async_logging/bin/simple_logging <options>`
+
+Characteristics:
+
+* Non-blocking I/O
+
+* Uses bounded internal queue
+
+* Events may be dropped if queue is full
+
+**Seastar-based Client**
+
+`./seastar_app_logging/bin/seastar_app_logging <options>`
+
+Characteristics:
+
+* Fully asynchronous
+
+* Integrated with Seastar reactor
+
+* Uses bounded queue
+
+* Drop-on-overload behavior
+
+**Options**
+
+`--host` - an IP address of the server
+
+`--port` - a port number the server listens to
+
+`--certificate` - a client's certificate file path
+
+`--key` - a client's key file path
+
+`--trusted` - a trusted certificate file path (when using self-generated certificates)
+
+`--time` - for how long to run
+
+`--size` - how big can the event logging queue grow (in bytes)
+
+7. **Log Events From Client**
+
 `Logger<MyBuffer, MyIO> logger(io);
 logger.logEvent(event0, shard, host);`
 
