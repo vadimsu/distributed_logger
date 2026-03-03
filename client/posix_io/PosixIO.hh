@@ -32,9 +32,10 @@ class PosixIO: public IIO{
 		int getFd() noexcept { return _fd; }
 		bool isConnected() noexcept { return _connected; }
 		bool isQueueEmpty() noexcept { return _queue.empty(); }
-		void setAsyncMode(bool mode) noexcept { _asyncMode = mode; }
 		bool getAsyncMode() noexcept { return _asyncMode; }
+		void setAsyncMode(bool) noexcept;
         private:
+		void fixAsyncMode()noexcept;
                 void initialize_connection() noexcept;
                 std::string _remoteHost;
                 uint16_t _port;

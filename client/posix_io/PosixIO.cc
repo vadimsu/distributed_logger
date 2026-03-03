@@ -11,6 +11,27 @@
 
 using namespace distributed_logger;
 
+void PosixIO::fixAsyncMode()noexcept{
+	int flags = fcntl(_fd, F_GETFL, 0); // Get current flags
+	if (flags == -1) {
+		syslog(LOG_ERR,"cannot get socket fd flags");
+		return;
+	}
+	if (_asyncMode){
+		// Add the O_NONBLOCK flag
+		if (fcntl(_fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+			syslog(LOG_ERR,"cannot get socket fd flags");
+			return;
+		}
+	}else{
+		// Add the O_NONBLOCK flag
+		if (fcntl(_fd, F_SETFL, flags & ~(O_NONBLOCK)) == -1) {
+			syslog(LOG_ERR,"cannot get socket fd flags");
+			return;
+		}
+	}
+}
+
 void PosixIO::initialize_connection() noexcept {
         if (_cert == "" || _key == "") {
                 char buf[1024];
@@ -122,14 +143,8 @@ void PosixIO::initialize_connection() noexcept {
         int send_buf_size = 1024 * 1024;
         if (setsockopt(_fd, SOL_SOCKET, SO_SNDBUF, &send_buf_size, sizeof(send_buf_size)) < 0) {
         }
+	fixAsyncMode();
 
-        int flags = fcntl(_fd, F_GETFL, 0);
-        if (flags < 0) {
-        }else{
-                // Set non-blocking flag
-                if (fcntl(_fd, F_SETFL, flags | O_NONBLOCK) < 0) {
-                }
-        }
         syslog(LOG_INFO,"Connected to centralized logging %s",_remoteHost.c_str());
 }
 
@@ -184,6 +199,14 @@ std::shared_ptr<IBufferWrapper> PosixIO::send(std::shared_ptr<IBufferWrapper> bu
         }else{
         }
         return nullptr;
+}
+
+void PosixIO::setAsyncMode(bool mode) noexcept {
+	bool fixMode = _asyncMode != mode;
+	_asyncMode = mode;
+	if (fixMode){
+		fixAsyncMode();
+	}
 }
 
 void PosixIO::onWriteOpportunity() noexcept {
