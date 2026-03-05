@@ -40,6 +40,16 @@ logger.LogEvent(3, "node-1");`
 5. The event server receives the data and decodes
 6. The decoded data is written to the configured storage
 
+**License**
+
+This project is licensed under the Apache License 2.0.
+
+You are free to use, modify, and distribute this software, including in commercial products.
+
+The license includes an explicit patent grant from contributors, which helps protect users and adopters of the project.
+
+See the LICENSE file for full details.
+
 **Why Distributed Logger Exists**
 
 Traditional logging systems often suffer from:
@@ -206,6 +216,61 @@ Payload encoding is generated based on user-defined event signatures.
 
 Full specification: docs/protocol.md
 
+**Design Goals**
+
+Distributed Logger is built around a small set of core design principles:
+
+• Minimal runtime overhead  
+  Logging must not become a bottleneck in high-performance services.
+
+• Strongly typed events  
+  Event schemas are defined once and enforced through generated APIs.
+
+• Storage independence  
+  Client applications remain unaware of the storage backend.
+
+• High ingestion throughput  
+  The system is optimized for large event volumes in distributed systems.
+
+• Simple operational model  
+  Minimal configuration and predictable runtime behavior.
+
+**Project Status**
+
+Distributed Logger is currently in early development.
+
+Implemented:
+
+✓ C++ client API generator  
+✓ TCP/TLS transport  
+✓ MongoDB storage backend  
+✓ ClickHouse storage backend  
+✓ Example clients (POSIX, epoll, Seastar)
+
+Planned:
+
+• Go client support
+• Python client support
+• additional storage backends
+• performance tuning for ClickHouse ingestion
+
+**Typical Use Cases**
+
+Distributed Logger is useful in systems such as:
+
+• distributed databases
+• high-performance backend services
+• trading or real-time processing systems
+• microservice infrastructures requiring event correlation
+• performance analysis pipelines
+
+Example events:
+
+• request lifecycle tracking
+• shard-level performance metrics
+• replication events
+• internal state transitions
+
 **Client Language Support**
 |Language| Status|
 |--------|-------|
@@ -226,13 +291,3 @@ Contributions are welcome, including:
 * Documentation enhancements
 
 See CONTRIBUTING.md.
-
-**License**
-
-This project is licensed under the Apache License 2.0.
-
-You are free to use, modify, and distribute this software, including in commercial products.
-
-The license includes an explicit patent grant from contributors, which helps protect users and adopters of the project.
-
-See the LICENSE file for full details.
