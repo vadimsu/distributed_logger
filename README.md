@@ -40,16 +40,6 @@ logger.LogEvent(3, "node-1");`
 5. The event server receives the data and decodes
 6. The decoded data is written to the configured storage
 
-**License**
-
-This project is licensed under the Apache License 2.0.
-
-You are free to use, modify, and distribute this software, including in commercial products.
-
-The license includes an explicit patent grant from contributors, which helps protect users and adopters of the project.
-
-See the LICENSE file for full details.
-
 **Why Distributed Logger Exists**
 
 Traditional logging systems often suffer from:
@@ -191,6 +181,13 @@ tools/  code generator
 
 docs/  architecture and design documentation
 
+**Client Language Support**
+|Language| Status|
+|--------|-------|
+|C++|   ✓ stable|
+|Go|    planned|
+|Python| planned|
+
 **Storage Model**
 
 Supported storage backends
@@ -210,7 +207,6 @@ Events are transmitted using a lightweight binary frame:
 `[uint32 packet_length]
 [uint64 event_id]
 [payload...]`
-
 
 Payload encoding is generated based on user-defined event signatures.
 
@@ -271,13 +267,6 @@ Example events:
 • replication events
 • internal state transitions
 
-**Client Language Support**
-|Language| Status|
-|--------|-------|
-|C++|   ✓ stable|
-|Go|    planned|
-|Python| planned|
-
 **Contributing**
 
 Contributions are welcome, including:
@@ -285,6 +274,16 @@ Contributions are welcome, including:
 * Additional storage backends
 
 * Client language generators
+
+**License**
+
+This project is licensed under the Apache License 2.0.
+
+You are free to use, modify, and distribute this software, including in commercial products.
+
+The license includes an explicit patent grant from contributors, which helps protect users and adopters of the project.
+
+See the LICENSE file for full details.
 
 * Performance improvements
 
