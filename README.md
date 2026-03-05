@@ -1,4 +1,4 @@
-**Distributed Logger**
+**Distributed Logger is a code-generated high-performance event logging system for distributed C/C++ applications.**
 
 High-performance structured event logging for distributed C/C++ systems.
 
@@ -167,11 +167,26 @@ go run . general_config.json
 
 `--size` - how big can the event logging queue grow (in bytes)
 
+**Project Layout**
+
+client/  C++ client libraries
+
+server/  ingestion server
+
+generated/  code generated from event headers
+
+examples/  example clients
+
+tools/  code generator
+
+docs/  architecture and design documentation
+
 **Storage Model**
 
 Supported storage backends
 
 • MongoDB
+
 • ClickHouse
 
 See docs/storage.md for architecture and configuration details.
