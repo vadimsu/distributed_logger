@@ -1,24 +1,56 @@
 **Distributed Logger**
 
-High-performance structured event logging for distributed C/C++ systems with pluggable storage backends and code-generated APIs.
+High-performance structured event logging for distributed C/C++ systems.
 
-Distributed Logger is designed for systems where traditional logging becomes a performance bottleneck or lacks structured query capabilities. It provides a lightweight wire protocol, generated strongly-typed logging APIs, and scalable ingestion pipelines targeting databases such as MongoDB and ClickHouse.
+Define events once in a header file and automatically generate:
+
+• strongly-typed client logging APIs
+• server decoders
+• storage pipelines
+
+Events are transmitted via a minimal binary protocol and ingested into
+scalable backends such as MongoDB and ClickHouse.
+
+Designed for high-throughput distributed systems where traditional logging
+becomes a bottleneck.
+
+`Example
+
+Define events in a header:
+
+#pragma once
+
+void LogEvent(uint64_t shard, std::string host);
+
+Generate code:
+
+./tools/run_parser.sh events.hh
+
+Use the generated API:
+
+Logger<MyBuffer, MyIO> logger(io);
+
+logger.LogEvent(3, "node-1");`
+
+**The flow:**
+1. A client constructs one or more Logger's instances. Internally a connection to event server is initiated
+2. A client calls logger.LogEvent
+3. the encoder (in the same call) encodes (binary) the parameters into a buffer
+4. Depending on choosen IO (customizable), it can be sent right away or be enqueued (and sent once a connection becomes writable)
+5. The event server receives the data and decodes
+6. The decoded data is written to the configured storage
 
 **Why Distributed Logger Exists**
 
-Modern distributed services generate large volumes of diagnostic and performance data. Traditional logging approaches often suffer from:
+Traditional logging systems often suffer from:
 
-* High runtime overhead
+• high runtime overhead
+• unstructured text logs
+• difficult cross-service correlation
+• limited support for high-performance C/C++ systems
 
-* Poor structure and queryability
-
-* Difficult correlation across machines and threads
-
-* Limited support for high-performance C/C++ environments
-
-* Tight coupling between logging format and storage backend
-
-Distributed Logger addresses these challenges by treating logs as **structured events** transmitted efficiently to centralized storage.
+Distributed Logger treats logs as structured events transmitted
+efficiently to centralized storage.
 
 **Key Features**
 ⚡ **High-Performance Event Logging**
@@ -97,125 +129,27 @@ E --> F[Generated Decoder]
 F --> G[Storage Adapter]
 G --> H[MongoDB / ClickHouse]
 ```
-
-**Design Principle**
-
-Only the decoder layer interacts with wire format.
-Storage layers operate on strongly typed event structures.
+Full architecture details are available in docs/architecture.md.
 
 **Quick Start**
-1. **Define Event API**
+`1. Define events
 
-Example event definition:
+#pragma once
+void LogEvent(uint64_t event0, uint64_t shard, std::string host);
+void LogEvent(uint64_t event1, uint64_t shard, std::string host, uint64_t timestamp);
 
-`#pragma once`
+2. Generate code
 
-`void LogEvent(uint64_t event0, uint64_t shard, std::string host);`
+./tools/run_parser.sh ./examples/example_header.hh
 
- `void LogEvent(uint64_t event1, uint64_t shard, std::string host, uint64_t timestamp);`
+3. Start server
 
-2. **Generate Client & Server Code**
+cd server/main
+go run . general_config.json
 
-From the project root:
+4. Run example client
 
-`./tools/run_parser.sh ./examples/example_header.hh`
-
-This will:
-
-* Parse the event schema in example_header.hh
-
-* Generate client encoders
-
-* Generate server decoders
-
-* Generate storage bindings
-
-**Generated Client Code**
-
-Generated client implementation:
-
-`generated/client/distributed_logger_api_int.hh`
-
-This file is included by:
-
-`client/api/LogAPIs.hh`
-
-When using example_header.hh, the generated file will contain:
-
-`Logger::LogEvent_event0(...)`
-`Logger::LogEvent_event1(...)`
-
-These are strongly typed member functions of the Logger class corresponding to the declared events.
-
-3. **Start Server**
- 
-From the project root:
-
-`cd server/main`
-
-`go run . general_config.json`
-
-Alternatively:
-
-`cd server/main`
-
-`go build .`
-
-`./main general_config.json`
-
-The server will:
-
-* Start TCP listener
-
-* Initialize configured storage backend
-
-* Spawn worker pool
-
-* Begin accepting client connections
-
-Make sure your `general_config.json` matches your storage configuration.
-
-5. **Run Example Clients**
-
-After the server is running, you can launch one of the example clients.
-
-**Synchronous Client (Blocking)**
-
-`./simple_logging/bin/simple_logging <options>`
-
-Characteristics:
-
-* Uses blocking socket calls
-
-* Applies natural backpressure
-
-* LogEvent() may block under load
-
-**Epoll-based Client (Async)**
-
-`./async_logging/bin/simple_logging <options>`
-
-Characteristics:
-
-* Non-blocking I/O
-
-* Uses bounded internal queue
-
-* Events may be dropped if queue is full
-
-**Seastar-based Client**
-
-`./seastar_app_logging/bin/seastar_app_logging <options>`
-
-Characteristics:
-
-* Fully asynchronous
-
-* Integrated with Seastar reactor
-
-* Uses bounded queue
-
-* Drop-on-overload behavior
+./examples/async_logging/bin/async_logging [options]`
 
 **Options**
 
@@ -233,51 +167,19 @@ Characteristics:
 
 `--size` - how big can the event logging queue grow (in bytes)
 
-7. **Log Events From Client**
-
-`Logger<MyBuffer, MyIO> logger(io);
-logger.logEvent(event0, shard, host);`
-
-**Supported Client Languages**
-**Language	Status**
-C++	✅ Stable
-Go	🚧 Planned
-Python	💡 Planned
-
-The wire protocol and generator architecture are language-agnostic and designed to support additional client implementations.
-
 **Storage Model**
 
-**MongoDB**
+Supported storage backends
 
-* Direct structured event insertion
+• MongoDB
+• ClickHouse
 
-* Flexible schema
-
-**ClickHouse**
-
-* Append-only ingestion table
-
-* Optional materialized views for typed event tables
-
-* Optimized for analytics workloads
+See docs/storage.md for architecture and configuration details.
 
 **Customization**
-
-Distributed Logger allows customization of:
-
-* IO transport implementations
-
-* Buffer management
-
-* Storage backends
-
-* Code generation extensions
-
 See docs/customization.md for details.
 
 **Protocol Overview**
-
 Events are transmitted using a lightweight binary frame:
 
 `[uint32 packet_length]
@@ -289,15 +191,12 @@ Payload encoding is generated based on user-defined event signatures.
 
 Full specification: docs/protocol.md
 
-**Project Status**
-
-Current focus:
-
-* Stabilizing wire protocol
-
-* Storage performance optimization
-
-* Generator extensibility
+**Client Language Support**
+|Language| Status|
+|--------|-------|
+|C++|   ✓ stable|
+|Go|    planned|
+|Python| planned|
 
 **Contributing**
 
@@ -322,5 +221,3 @@ You are free to use, modify, and distribute this software, including in commerci
 The license includes an explicit patent grant from contributors, which helps protect users and adopters of the project.
 
 See the LICENSE file for full details.
-
-
