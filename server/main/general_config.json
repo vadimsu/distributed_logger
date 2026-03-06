@@ -1,6 +1,6 @@
 {
-	"StorageConfigFileName":"storage_config_mongo.json",
+	"StorageConfigFileName":"storage_config_clickhouse.json",
         "EventCollectorFileName":"event_collector.json",
 	"NumberOfWorkers": 10,
-	"WorkersBufferSize":2048
+	"WorkersBufferSize":10000
 }

@@ -13,7 +13,7 @@ var workersBufferSize int = 1024
 
 func workerMain(s storage.StorageAPI, ch chan []byte){
 	var batch [][]byte
-	ticker := time.NewTicker(10)
+	ticker := time.NewTicker(100000  * time.Millisecond)
 	defer ticker.Stop()
 	for ;; {
 		select {
