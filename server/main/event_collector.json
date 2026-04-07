@@ -1,11 +1,11 @@
 {
 	"listener":{
         	"port":"7777",
-	        "ip":"127.0.0.1"
+	        "ip":"172.20.0.4"
 	},
 	"certificate":{
-		"server":"/home/vsuraev/mtls_server.crt",
-		"key":"/home/vsuraev/mtls_server.key",
-		"root":"/home/vsuraev/mtls_ca.crt"
+		"server":"",
+		"key":"",
+		"root":""
 	}
 }

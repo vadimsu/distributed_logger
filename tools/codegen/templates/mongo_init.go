@@ -2,6 +2,7 @@ package mongo
 
 import (
         "context"
+	"fmt"
 	"distributedlogger.com/storage"
 	"distributedlogger.com/event_decoder"
 	"distributedlogger.com/decoder"
@@ -21,9 +22,14 @@ func Init(args ...any) (*MongoStorage, error){
         dbname, _ := args[3].(string)
         username, _ := args[4].(string)
         password, _ := args[5].(string)
-//      uri := "mongodb://127.0.0.1:27017/?directConnection=true&serverSelectionTimeoutMS=2000&appName=mongosh+2.3.9"
-        uri := "mongodb://"+username+":"+password+"@"+host+":"+port+"/?"+dbname+"?authSource=admin"
-
+	uri := ""
+	if username != "" && password != ""{
+		uri = "mongodb://"+username+":"+password+"@"+host+":"+port+"/"+dbname+"?authSource=admin"
+		
+	}else{
+		uri = "mongodb://"+host+":"+port+"/"+dbname
+	}
+	fmt.Println("URI ",uri)
         client, err := mongo.Connect(options.Client().
                 ApplyURI(uri))
         if err != nil {

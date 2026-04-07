@@ -7,34 +7,31 @@ services:
       app_net:
         ipv4_address: 172.20.0.3
 
-  clickhouse:
-    image: clickhouse/clickhouse-server:latest
-    volumes: [./listen.xml:/etc/clickhouse-server/config.d/listen.xml,
-./users.xml:/etc/clickhouse-server/users.d/default-user.xml]
-    networks:
-      app_net:
-        ipv4_address: 172.20.0.2
-
   server:
     build:
       context: ..
       dockerfile: /home/vsuraev/distributed_logger/docker/server.Dockerfile
     depends_on:
       - mongo
-      - clickhouse
     ports:
-      - "9000:9000"
       - "21701:21701"
     networks:
       app_net:
         ipv4_address: 172.20.0.4
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x distr_logger > /dev/null"]
+      interval: 10s
+      timeout: 10s
+      start_period: 1h
+      retries: 999
 
   client:
     build:
       context: ..
       dockerfile: /home/vsuraev/distributed_logger/docker/client.Dockerfile
     depends_on:
-      - server
+      server:
+        condition: service_healthy
     ports:
       - "7777:7777"
     networks:
