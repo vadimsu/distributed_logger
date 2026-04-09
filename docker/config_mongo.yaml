@@ -3,9 +3,12 @@ version: "1.0"
 services:
   mongo:
     image: mongo:latest
+    command: sh -c "mongod --quiet > /dev/null 2>&1"
     networks:
       app_net:
         ipv4_address: 172.20.0.3
+    logging:
+        driver: "none"
 
   server:
     build:
