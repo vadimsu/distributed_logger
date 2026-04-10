@@ -3,21 +3,29 @@ version: "1.0"
 services:
   mongo:
     image: mongo:latest
-    command: sh -c "mongod --quiet > /dev/null 2>&1"
+    command: sh -c "mongod --quiet --bind_ip_all > /dev/null 2>&1"
     networks:
       app_net:
         ipv4_address: 172.20.0.3
     logging:
         driver: "none"
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.runCommand({ ping: 1 })"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "21701:21701"
 
   server:
     build:
       context: ..
       dockerfile: /home/vsuraev/distributed_logger/docker/server.Dockerfile
     depends_on:
-      - mongo
+      mongo:
+        condition: service_healthy
     ports:
-      - "21701:21701"
+      - "7777:7777"
     networks:
       app_net:
         ipv4_address: 172.20.0.4
@@ -35,8 +43,6 @@ services:
     depends_on:
       server:
         condition: service_healthy
-    ports:
-      - "7777:7777"
     networks:
       app_net:
         ipv4_address: 172.20.0.5

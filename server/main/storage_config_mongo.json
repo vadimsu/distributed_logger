@@ -2,7 +2,7 @@
 	"StorageType":"mongo",
         "Username":"",
         "Password":"",
-        "Host":"172.20.0.3",
+        "Host":"docker-mongo-1",
         "Port":"27017",
         "Dbname":"eventdemo",
         "DataRetentionPeriod":"3"

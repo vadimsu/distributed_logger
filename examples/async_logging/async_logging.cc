@@ -27,7 +27,6 @@ void *run_loop(void *arg){
 	string host = "async_logging";
 	#define MAX_EVENTS 10
         struct epoll_event ev, events[MAX_EVENTS];
-	std::cout<<"host "<<host<<std::endl;
 	shared_ptr<PosixIO> eventPosix = make_shared<PosixIO>(loop_params->logserverhost, loop_params->logserverport,
 			std::forward<string>(loop_params->certificate), std::forward<string>(loop_params->key),
 			std::forward<string>(loop_params->trusted));

@@ -23,13 +23,13 @@ func handleConnection(conn net.Conn){
         packetLength = 0
         alreadyRead := 0
         headerBuf = make([]byte, 4)
-        fmt.Println("handling connection")
+//        fmt.Println("handling connection")
         for{
                 if packetLength == 0{
 //                        fmt.Println("read offset ",alreadyRead)
                         numOfBytes, err := conn.Read(headerBuf[alreadyRead:])
                         if err != nil{
-                                fmt.Println("error on read ",err)
+//                                fmt.Println("error on read ",err)
                                 break
                         }
   //                      fmt.Println("read ",numOfBytes,alreadyRead)
@@ -75,7 +75,7 @@ func LaunchListener(confPath string){
                 fmt.Println(err)
                 return
         }else{
-                fmt.Println("opened")
+//                fmt.Println("opened")
         }
         var config config.Config
         var ln net.Listener
@@ -122,13 +122,13 @@ func LaunchListener(confPath string){
                 return
         }
         for{
-                fmt.Println("Accepting")
+//                fmt.Println("Accepting")
                 conn, err := ln.Accept()
                 if err != nil {
                         fmt.Println(err)
                         return
                 }
-                fmt.Println("Accepted")
+//                fmt.Println("Accepted")
 		bufio.NewReaderSize(conn,1024*1024*1024)
 		bufio.NewWriterSize(conn,1024*1024*100)
                 go handleConnection(conn)

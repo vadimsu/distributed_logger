@@ -35,6 +35,7 @@ func Init(args ...any) (*MongoStorage, error){
         if err != nil {
                 panic(err)
         }
+	fmt.Println("Connected")
         db := client.Database(dbname)
         var coll *mongo.Collection
         coll = db.Collection("events")
