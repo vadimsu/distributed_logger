@@ -20,7 +20,7 @@ services:
   server:
     build:
       context: ..
-      dockerfile: /home/vsuraev/distributed_logger/docker/server.Dockerfile
+      dockerfile: /home/vsuraev/distributed_logger/docker/server_mongo.Dockerfile
     depends_on:
       mongo:
         condition: service_healthy

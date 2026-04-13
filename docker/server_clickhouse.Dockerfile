@@ -45,13 +45,10 @@ RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/
 COPY --from=builder /app/server/main/distr_logger ./server/main/distr_logger
 
 # Copy config
-COPY server/main/general_config.json ./server/main/general_config.json
-COPY server/main/storage_config_mongo.json ./server/main/storage_config_mongo.json
-COPY server/main/storage_config_clickhouse.json ./server/main/storage_config_clickhouse.json
-COPY server/main/event_collector.json ./server/main/event_collector.json
+COPY examples/clickhouse_pipeline/general_config.json ./server/main/general_config.json
+COPY examples/clickhouse_pipeline/storage_config_clickhouse.json ./server/main/storage_config_clickhouse.json
+COPY examples/clickhouse_pipeline/event_collector.json ./server/main/event_collector.json
 
-COPY examples/run_server.sh ./examples/run_server.sh
+COPY examples/clickhouse_pipeline/run_server.sh ./examples/run_server.sh
 
-#CMD ["main/distr_logger", "./general_config.json"]
 CMD ["./examples/run_server.sh"]
-#CMD ["ls"]

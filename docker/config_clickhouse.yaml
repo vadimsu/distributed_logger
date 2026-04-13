@@ -9,27 +9,34 @@ services:
     networks:
       app_net:
         ipv4_address: 172.20.0.2
+    ports:
+      - "9000:9000"
 
   server:
     build:
       context: ..
-      dockerfile: /home/vsuraev/distributed_logger/docker/server.Dockerfile
+      dockerfile: /home/vsuraev/distributed_logger/docker/server_clickhouse.Dockerfile
     depends_on:
       - clickhouse
     ports:
-      - "9000:9000"
+      - "7777:7777"
     networks:
       app_net:
         ipv4_address: 172.20.0.4
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x distr_logger > /dev/null"]
+      interval: 10s
+      timeout: 10s
+      start_period: 1h
+      retries: 999
 
   client:
     build:
       context: ..
       dockerfile: /home/vsuraev/distributed_logger/docker/client.Dockerfile
     depends_on:
-      - server
-    ports:
-      - "7777:7777"
+      server:
+        condition: service_healthy
     networks:
       app_net:
         ipv4_address: 172.20.0.5

@@ -1,0 +1,9 @@
+{
+	"StorageType":"clickhouse",
+        "Username":"",
+        "Password":"",
+        "Host":"docker-clickhouse-1",
+        "Port":"9000",
+        "Dbname":"default",
+        "DataRetentionPeriod":"3"
+}
