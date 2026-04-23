@@ -11,13 +11,19 @@ services:
         ipv4_address: 172.20.0.2
     ports:
       - "9000:9000"
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
 
   server:
     build:
       context: ..
       dockerfile: /home/vsuraev/distributed_logger/docker/server_clickhouse.Dockerfile
     depends_on:
-      - clickhouse
+      clickhouse:
+        condition: service_healthy
     ports:
       - "7777:7777"
     networks:
