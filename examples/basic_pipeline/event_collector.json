@@ -1,7 +1,7 @@
 {
 	"listener":{
         	"port":"7777",
-	        "ip":"172.20.0.4"
+	        "ip":"docker-server-1"
 	},
 	"certificate":{
 		"server":"",

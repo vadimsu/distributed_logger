@@ -31,7 +31,7 @@ COPY ./examples/async_logging/CMakeLists.txt ./examples/async_logging/
 
 WORKDIR ./examples/async_logging
 
-RUN rm CMakeCache.txt && cmake . && make
+RUN rm -f CMakeCache.txt && cmake . && make
 
 RUN strings /usr/lib/x86_64-linux-gnu/libstdc++.so.6 | grep GLIBCXX
 
@@ -49,4 +49,4 @@ RUN apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /home/distributed_logger/examples/async_logging/bin/async_logging ./async_logging
-CMD ["./async_logging","--host","172.20.0.4", "--port", "7777"]
+CMD ["./async_logging","--host","docker-server-1", "--port", "7777"]
