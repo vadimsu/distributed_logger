@@ -28,6 +28,7 @@ class PosixIO: public IIO{
 		uint64_t getLogsPostedCount() noexcept override { return _logPostedCnt; }
 		uint64_t getLogsDroppedCount() noexcept override { return _logDroppedCnt; }
 		uint64_t getLogsSentCount() noexcept override { return _logSentCnt; }
+		void connectionGracefulShutdown() noexcept override;
                 void onWriteOpportunity() noexcept;
 		int getFd() noexcept { return _fd; }
 		bool isConnected() noexcept { return _connected; }

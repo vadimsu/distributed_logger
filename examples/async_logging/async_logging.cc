@@ -52,6 +52,7 @@ void *run_loop(void *arg){
 			}	
 		}
 	}
+	eventPosix->connectionGracefulShutdown();
 	loop_params->logs_submitted = eventPosix->getLogsPostedCount();
 	loop_params->logs_dropped = eventPosix->getLogsDroppedCount();
 	loop_params->logs_sent = eventPosix->getLogsSentCount();

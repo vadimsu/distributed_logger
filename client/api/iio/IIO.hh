@@ -14,6 +14,7 @@ class IIO{
 		virtual uint64_t getLogsPostedCount() noexcept = 0;
 		virtual uint64_t getLogsDroppedCount() noexcept = 0;
 		virtual uint64_t getLogsSentCount() noexcept = 0;
+		virtual void connectionGracefulShutdown() noexcept = 0;
 };
 
 }

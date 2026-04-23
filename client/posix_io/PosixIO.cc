@@ -3,6 +3,7 @@
 #include <cstring>
 #include <unistd.h>
 #include <fcntl.h>
+#include <netinet/tcp.h>
 #include <iostream>
 
 #define CHK_NULL(x) if((x) == NULL) exit(1);
@@ -236,4 +237,11 @@ void PosixIO::onWriteOpportunity() noexcept {
 			break;
                 }
         }
+}
+
+void PosixIO::connectionGracefulShutdown() noexcept {
+	shutdown(_fd, SHUT_WR);
+	struct linger l = {1, 5};  // wait up to 5 seconds
+	setsockopt(_fd, SOL_SOCKET, SO_LINGER, &l, sizeof(l));
+	close(_fd);
 }
