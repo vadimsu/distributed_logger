@@ -3,6 +3,7 @@
 #include <time.h>
 #include <seastar/core/app-template.hh>
 #include <seastar/core/smp.hh>
+#include <seastar/core/map_reduce.hh>
 #include <seastar/core/reactor.hh>
 #include <seastar/core/sleep.hh>
 #include <seastar/core/thread.hh>
@@ -12,16 +13,19 @@
 #include <boost/intrusive_ptr.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
+#include <boost/iterator/counting_iterator.hpp>
+
 #include "SeastarIO.hh"
 #include "SeastarTLS_IO.hh"
 #include "SeastarBuffer.hh"
 #include "LogAPIs.hh"
 #include "common.hh"
+#include <seastar/core/sleep.hh>
 
 namespace bpo = boost::program_options;
 using MyLogger = distributed_logger::Logger<distributed_logger::SeastarBuffer, distributed_logger::SeastarIO>;
 
-static seastar::future<std::tuple<uint64_t,uint64_t,uint64_t>>
+static seastar::future<std::tuple<unsigned, uint64_t,uint64_t,uint64_t>>
 run_loop(const LoopParams& loop_params){
 	std::shared_ptr<distributed_logger::SeastarIO> iio;
 	if (loop_params.certificate != "" && loop_params.key != ""){
@@ -55,9 +59,42 @@ run_loop(const LoopParams& loop_params){
 		}
 		iio->disconnect().get();
 		fmt::print("shard {} finished\n",seastar::this_shard_id());
-		return std::tuple<uint64_t,uint64_t,uint64_t>(iio->getLogsPostedCount(),
+		return std::tuple<unsigned, uint64_t,uint64_t,uint64_t>(seastar::this_shard_id(), iio->getLogsPostedCount(),
 				iio->getLogsDroppedCount(),iio->getLogsSentCount());
 	});
+}
+
+seastar::future<std::vector<std::tuple<unsigned, uint64_t, uint64_t, uint64_t>>> collect_results(LoopParams loop_params) {
+    auto current_shard = seastar::this_shard_id();
+    
+    // Create a range of all shards except the current one
+    auto shards = boost::make_iterator_range(
+        boost::counting_iterator<unsigned>(0),
+        boost::counting_iterator<unsigned>(seastar::smp::count)
+    );
+
+    return seastar::map_reduce(shards.begin(), shards.end(),
+        [current_shard, loop_params] (unsigned shard_id) mutable{
+            if (shard_id == current_shard) {
+                // Skip the current shard by returning an empty or dummy value
+                return seastar::make_ready_future<std::optional<std::tuple<unsigned, uint64_t, uint64_t, uint64_t>>>(std::nullopt);
+            }
+            // Mapper: Submit the function to the target shard
+            return seastar::smp::submit_to(shard_id, [loop_params] {
+                return run_loop(loop_params); // returns int or future<int>
+            }).then([] (std::tuple<unsigned, uint64_t, uint64_t, uint64_t> result) {
+                return std::make_optional(result);
+            });
+        },
+        std::vector<std::tuple<unsigned, uint64_t, uint64_t, uint64_t>>(), // Initial value (accumulator)
+        [] (std::vector<std::tuple<unsigned, uint64_t, uint64_t, uint64_t>>&& acc, std::optional<std::tuple<unsigned, uint64_t, uint64_t, uint64_t>> result) {
+            // Reducer: Fold the results into the vector (runs on current shard)
+            if (result) {
+                acc.push_back(*result);
+            }
+            return std::move(acc);
+        }
+    );
 }
 
 int main(int argc, char** argv) {
@@ -103,38 +140,33 @@ int main(int argc, char** argv) {
 			fmt::print("{}\n",args["size"].as<size_t>());
 			loop_params.queuesize = args["size"].as<size_t>();
 		}
+
 		try {
-			return seastar::async([loop_params]{
-				std::vector<seastar::future<std::tuple<uint64_t,uint64_t,uint64_t>>> futs;
-				seastar::smp::invoke_on_others([&loop_params, &futs] () mutable{
-					auto fut = run_loop(loop_params);
-					futs.push_back(std::move(fut));
-				}).get();
-				seastar::when_all(futs.begin(), futs.end()).then([](auto tups){
-					uint64_t logs_submitted_total = 0;
-					uint64_t logs_dropped_total = 0;
-					uint64_t logs_sent_total = 0;
-					for(auto& f : tups){
-						auto v = f.get();
-						logs_submitted_total += std::get<0>(v);
-						logs_dropped_total += std::get<1>(v);
-						logs_sent_total += std::get<2>(v);
-					}
-					fmt::print("Posted {} dropped {} sent {}\n",
-							logs_submitted_total, logs_dropped_total,logs_sent_total);
-					return seastar::make_ready_future<>();
-				}).handle_exception([](std::exception_ptr e){
-					fmt::print("{}\n",e);
-					return seastar::make_ready_future<>();
-				}).get();
-			}).then([] {
-				// Force a jump back to 0 if we've drifted
-				return seastar::smp::submit_to(0, [] {
+			auto start_ts = time(NULL);
+			return collect_results(loop_params).then([start_ts] (std::vector<std::tuple<unsigned, uint64_t, uint64_t, uint64_t>> results){
+				uint64_t total_posted = 0;
+				uint64_t total_dropped = 0;
+				uint64_t total_sent = 0;
+				for (auto i = 0; i < results.size(); i++){
+					fmt::print("shard {} posted {} dropped {} sent {}\n",
+							std::get<0>(results[i]),
+							std::get<1>(results[i]),
+							std::get<2>(results[i]),
+							std::get<3>(results[i]));
+					total_posted += std::get<1>(results[i]);
+					total_dropped += std::get<2>(results[i]);
+					total_sent += std::get<3>(results[i]);
+				}
+				fmt::print("totals: posted {} dropped {} sent {}\n",total_posted, total_dropped, total_sent);
+				return seastar::smp::submit_to(0, [start_ts] {
+					auto end_ts = time(NULL);
+					fmt::print("Total time {}\n",end_ts - start_ts);
 					seastar::engine().exit(0);
 					return seastar::make_ready_future<>();
 				});
 			});
-		}catch(...){
+		}catch(std::exception& exc){
+			fmt::print("{}\n",exc.what());
 		}
 	});
 }

@@ -66,12 +66,15 @@ int main(int argc, char **argv){
 	if (rc != 0){
 		return rc;
 	}
-	long num_cores;
+	long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
 
 	// Get the number of online processors (logical cores)
-	num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+	if (loop_params.cores != 0){
+		num_cores = loop_params.cores;
+	}
 	vector<tuple<pthread_t,LoopParams*>> threads;
-	for (int core = 1; core < num_cores; core++){
+	auto start_ts = time(NULL);
+	for (int core = 1; core <= num_cores; core++){
 		pthread_t threadid;
 		LoopParams *loop_params_clone = new LoopParams(loop_params);
 		loop_params_clone->shard = core;
@@ -81,13 +84,17 @@ int main(int argc, char **argv){
 	uint64_t logs_submitted_total = 0;
 	uint64_t logs_dropped_total = 0;
 	uint64_t logs_sent_total = 0;
+	auto core = 1;
 	for(auto t : threads){
 		pthread_join(get<0>(t), NULL);
 		logs_submitted_total += get<1>(t)->logs_submitted;
 		logs_dropped_total += get<1>(t)->logs_dropped;
 		logs_sent_total += get<1>(t)->logs_sent;
+		cout<<"core "<<core<<" posted "<<get<1>(t)->logs_submitted<<" dropped "<<get<1>(t)->logs_dropped<<" sent "<<get<1>(t)->logs_sent<<endl;
 	}
+	auto end_ts = time(NULL);
 	cout<<"logs posted "<<logs_submitted_total<<" dropped "<<logs_dropped_total<<endl;
 	cout<<"logs sent "<<logs_sent_total<<endl;
+	cout<<"time "<<end_ts - start_ts<<endl;
 	return 0;
 }

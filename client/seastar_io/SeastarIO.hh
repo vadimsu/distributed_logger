@@ -23,6 +23,7 @@ class SeastarIO : public IIO{
 		uint64_t getLogsPostedCount() noexcept override { return _logPostedCnt; }
 		uint64_t getLogsDroppedCount() noexcept override { return _logDroppedCnt; }
 		uint64_t getLogsSentCount() noexcept override { return _logSentCnt; }
+		void connectionGracefulShutdown() noexcept override;
 		virtual void connect() noexcept;
 		virtual bool isConnected() noexcept { return _connected; }
 		virtual seastar::future<> disconnect() noexcept;

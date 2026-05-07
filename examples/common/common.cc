@@ -18,7 +18,8 @@ int get_common_options(int argc, char** argv, LoopParams& loop_params){
 			("trusted", po::value<string>()->default_value(""), "TLS root certificate file path (for self-signed)")
 			("host", po::value<string>()->default_value("127.0.0.1"), "Log server's IP address")
 			("port", po::value<uint16_t>()->default_value(7777), "Log server's port")
-			("size", po::value<size_t>()->default_value(0), "Logging queue size (in bytes). 0 means unlimited");
+			("size", po::value<size_t>()->default_value(0), "Logging queue size (in bytes). 0 means unlimited")
+			("cores", po::value<long>()->default_value(0), "Number of cores to run");
 		po::variables_map vm;
 		po::store(po::parse_command_line(argc, argv, desc), vm);
 		po::notify(vm);
@@ -46,6 +47,9 @@ int get_common_options(int argc, char** argv, LoopParams& loop_params){
 		}
 		if (vm.count("size")){
 			loop_params.queuesize = vm["size"].as<size_t>();
+		}
+		if (vm.count("cores")){
+			loop_params.cores = vm["cores"].as<long>();
 		}
 	}catch(std::exception& e){
 		cerr << "error: " << e.what() <<endl;

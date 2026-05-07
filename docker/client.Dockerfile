@@ -49,4 +49,4 @@ RUN apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /home/distributed_logger/examples/async_logging/bin/async_logging ./async_logging
-CMD ["./async_logging","--host","docker-server-1", "--port", "7777"]
+CMD ["./async_logging","--host","docker-server-1", "--port", "7777", "--cores", "4", "--time", "10"]

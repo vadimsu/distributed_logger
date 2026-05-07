@@ -64,20 +64,18 @@ seastar::future<> SeastarIO::disconnect() noexcept {
 	if (!_connected){
 		return seastar::make_ready_future<>();
 	}
-	_shutting_down = true;
 	return _tx_finished.then([this]{
-		_socket.shutdown_output();
-		_socket.shutdown_input();
+		_shutting_down = true;
 		auto out_fut = _out.close();
 		auto in_fut = _in.close();
 		return seastar::when_all(std::move(out_fut), std::move(in_fut)).then([this](auto futs){
 			if (std::get<0>(futs).failed()){
 				fmt::print("failed while waiting for in {}\n",
-						std::get<0>(futs).get_exception());
+					std::get<0>(futs).get_exception());
 			}
 			if (std::get<1>(futs).failed()){
 				fmt::print("failed while waiting for out {}\n",
-						std::get<1>(futs).get_exception());
+					std::get<1>(futs).get_exception());
 			}
 			return seastar::make_ready_future<>();
 		}).handle_exception([this] (std::exception_ptr e) {
@@ -93,7 +91,7 @@ seastar::future<> SeastarIO::disconnect() noexcept {
 std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> buffer) noexcept {
 	auto buf = static_pointer_cast<SeastarBuffer>(buffer);
 	auto seastar_buf = buf->getBuffer();
-	if (_queuemaxsize != 0 && _queuesize + /*buffer->getCapacity()*/seastar_buf.size() > _queuemaxsize){
+	if (_queuemaxsize != 0 && _queuesize + seastar_buf.size() > _queuemaxsize){
 		_logDroppedCnt++;
 		return nullptr;
 	}
@@ -101,24 +99,23 @@ std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> 
 		return nullptr;
 	}
 	_logPostedCnt++;
-	uint32_t length = /*buffer->getCapacity()*/seastar_buf.size() - 4;
+	uint32_t length = seastar_buf.size() - 4;
         length = htonl(length);
-        memcpy(/*buffer->getData()*/seastar_buf.get_write(), &length, sizeof(length));
-	_queuesize += /*buf->getBuffer()*/seastar_buf.size();
-	_wqueue.push_back(std::move(/*buf->getBuffer()*/seastar_buf));
-//	_queuesize += ntohl(length) + 4;
+        memcpy(seastar_buf.get_write(), &length, sizeof(length));
+	_queuesize += seastar_buf.size();
+	_wqueue.push_back(std::move(seastar_buf));
 	if (_transmitting || !_connected){
 		return nullptr;
 	}
 	_transmitting = true;
         _tx_finished = std::move(seastar::do_until([this] {
 		if (_wqueue.empty() || !_connected || _shutting_down){
-			_transmitting = false;
 			return true;
 		}
 		return false;
 	},
 	[this] {
+		_transmitting = true;
 		auto bufsize = _wqueue.front().size();
 		auto buf = std::move(_wqueue.front());
 		_wqueue.pop_front();
@@ -126,7 +123,7 @@ std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> 
 			_queuesize -= (bufsize >= _queuesize ? _queuesize : bufsize);
 			_logSentCnt++;
 			if (_wqueue.empty()){
-				 return _out.flush();
+				 (void)_out.flush();
 			}
 			return seastar::make_ready_future<>();
 		}).handle_exception([this](std::exception_ptr e) mutable{
@@ -135,6 +132,12 @@ std::shared_ptr<IBufferWrapper> SeastarIO::send(std::shared_ptr<IBufferWrapper> 
 			_connected = false;
 			return seastar::make_ready_future<>();
 		});
-	}));
+	})).finally([this]{
+		_transmitting = false;
+	});
 	return nullptr;
+}
+
+void SeastarIO::connectionGracefulShutdown() noexcept {
+	throw (std::logic_error("connectionGracefulShutdown should not be called, use disconnect instead"));
 }

@@ -1,0 +1,11 @@
+{
+	"listener":{
+        	"port":"7777",
+	        "ip":"docker-server-1"
+	},
+	"certificate":{
+		"server":"",
+		"key":"",
+		"root":""
+	}
+}
