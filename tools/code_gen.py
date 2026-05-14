@@ -295,10 +295,14 @@ class CppCodeGen(CodeGen):
     def __init__(self, func_dict):
         super().__init__(func_dict)
         self._code = ""
+        self._storage_enum_code = ""
+        self._storage_structures_code = ""
+        self._decoder_code = ""
 
     def generate_code(self) -> None:
         lines: List[str] = []
-        enum_lines: List[str] = ["typedef enum {"]
+        enum_lines: List[str] = ["enum Events {"]
+        storage_structures: List[str] = []
 
         valid_funcs = [f for f in self._func_dict if len(f.get("params", [])) >= 1]
 
@@ -308,6 +312,15 @@ class CppCodeGen(CodeGen):
                 enum_lines.append(f"\t{event_name},")
             else:
                 enum_lines.append(f"\t{event_name}")
+
+            struct_name = event_name[0].upper() + event_name[1:] + "_struct"
+            storage_structures.append(f"struct {struct_name} {{")
+            for p in f.get("params", []):
+                p_name, p_type = p[0], p[1]
+                field_type = "std::string" if p_type == "string" else p_type
+                storage_structures.append(f"\t{field_type} {p_name};")
+            storage_structures.append("};")
+            storage_structures.append("")
 
             # Function signature
             ret = f.get("return", "void")
@@ -333,20 +346,95 @@ class CppCodeGen(CodeGen):
             lines.extend(total_length)
             lines.append("\tstd::shared_ptr<Buffer> buffer = std::make_shared<Buffer>(total_length);")
             lines.append("\tbuffer->setWriteOffset(4);")
-            for idx, p in enumerate(f.get("params", [])):
-                if idx == 0:
-                    lines.append(f"\tencode(buffer,Events::{p[0]});")
+            for param_idx, p in enumerate(f.get("params", [])):
+                if param_idx == 0:
+                    lines.append(f"\tencode(buffer,{p[0]});")
                 else:
                     lines.append(f"\tencode(buffer,{p[0]});")
             lines.append("\t_iio->send(buffer);")
             lines.append("}")
 
-        enum_lines.append("} Events;")
+        enum_lines.append("};")
         self._storage_enum_code = "\n".join(enum_lines) + "\n"
+        self._storage_structures_code = "\n".join(storage_structures) + "\n"
         self._code = "\n".join(lines) + "\n"
+
+        # C++ decoder generation
+        decoder_lines: List[str] = [
+            "#pragma once",
+            "#include <cstddef>",
+            "#include <cstdint>",
+            "#include <string>",
+            "#include <stdexcept>",
+            "#include \"storage.hh\"",
+            "",
+            "inline uint16_t DecodeUint16(const char* packet, size_t size, size_t& decoded) {",
+            "\tif (size < 2) {",
+            "\t\tthrow std::runtime_error(\"not enough bytes to decode uint16\");",
+            "\t}",
+            "\tdecoded = 2;",
+            "\treturn (static_cast<uint16_t>(static_cast<unsigned char>(packet[0])) << 8) |",
+            "\t\tstatic_cast<uint16_t>(static_cast<unsigned char>(packet[1]));",
+            "}",
+            "",
+            "inline uint64_t DecodeUint64(const char* packet, size_t size, size_t& decoded) {",
+            "\tif (size < 8) {",
+            "\t\tthrow std::runtime_error(\"not enough bytes to decode uint64\");",
+            "\t}",
+            "\tuint64_t value = 0;",
+            "\tfor (int i = 0; i < 8; ++i) {",
+            "\t\tvalue = (value << 8) | static_cast<uint64_t>(static_cast<unsigned char>(packet[i]));",
+            "\t}",
+            "\tdecoded = 8;",
+            "\treturn value;",
+            "}",
+            "",
+            "inline std::string DecodeString(const char* packet, size_t size, size_t& decoded) {",
+            "\tsize_t decoded_this_time = 0;",
+            "\tuint16_t string_length = DecodeUint16(packet, size, decoded_this_time);",
+            "\tif (size < decoded_this_time + string_length) {",
+            "\t\tthrow std::runtime_error(\"not enough bytes to decode string\");",
+            "\t}",
+            "\tstd::string value(packet + decoded_this_time, packet + decoded_this_time + string_length);",
+            "\tdecoded = decoded_this_time + string_length;",
+            "\treturn value;",
+            "}",
+            ""
+        ]
+
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f["params"][0])
+            struct_name = event_name[0].upper() + event_name[1:] + "_struct"
+            decoder_lines.append(f"inline {struct_name} Decode_{event_name}(const char* packet, size_t size) {{")
+            decoder_lines.append(f"\t{struct_name} result{{}};")
+            decoder_lines.append(f"\tsize_t offset = 0;")
+            decoder_lines.append(f"\tsize_t decodedThisTime = 0;")
+            decoder_lines.append(f"\tresult.{f['params'][0][0]} = {event_name};")
+
+            for idx, p in enumerate(f.get("params", [])):
+                if idx == 0:
+                    continue
+                p_name, p_type = p[0], p[1]
+                if p_type == "string":
+                    decoder_lines.append(f"\tresult.{p_name} = DecodeString(packet + offset, size - offset, decodedThisTime);")
+                else:
+                    decoder_lines.append(f"\tresult.{p_name} = DecodeUint64(packet + offset, size - offset, decodedThisTime);")
+                decoder_lines.append("\toffset += decodedThisTime;")
+
+            decoder_lines.append("\treturn result;")
+            decoder_lines.append("}")
+            decoder_lines.append("")
+
+        self._decoder_code = "\n".join(decoder_lines)
 
     def get_declarations_code(self):
         return self._code
 
     def get_storage_enum_code(self):
         return self._storage_enum_code
+
+    def get_storage_structures_code(self):
+        return self._storage_structures_code
+
+    def get_decoder_code(self):
+        return self._decoder_code

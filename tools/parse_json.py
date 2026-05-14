@@ -130,6 +130,7 @@ with open(sys.argv[1]) as fp:
     os.makedirs(project_root + "generated/server/storage/mongo", exist_ok=True)
     os.makedirs(project_root + "generated/server/storage/clickhouse", exist_ok=True)
     os.makedirs(project_root + "generated/server/event_decoder", exist_ok=True)
+    os.makedirs(project_root + "server/seastar", exist_ok=True)
     os.makedirs(project_root + "generated/client", exist_ok=True)
     with open(project_root + "generated/server/storage/storage.go", "w") as storage_fp:
         storage_fp.write(goCodeGen.get_storage_enum_code())
@@ -152,4 +153,12 @@ with open(sys.argv[1]) as fp:
         storage_fp.write(cppCodeGen.get_declarations_code())
     with open(project_root + "generated/server/event_decoder/event_decoder.go", "w") as storage_fp:
         storage_fp.write(goCodeGen.get_decoder_code())
+    with open(project_root + "server/seastar/storage.hh", "w") as storage_fp:
+        storage_fp.write("#pragma once\n")
+        storage_fp.write("#include <cstdint>\n")
+        storage_fp.write("#include <string>\n\n")
+        storage_fp.write(cppCodeGen.get_storage_enum_code())
+        storage_fp.write(cppCodeGen.get_storage_structures_code())
+    with open(project_root + "server/seastar/event_decoder.hh", "w") as storage_fp:
+        storage_fp.write(cppCodeGen.get_decoder_code())
 #    print(str(cppCodeGen()))

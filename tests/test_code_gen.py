@@ -40,6 +40,22 @@ def test_cpp_codegen_generates_snippets():
     assert 'Events' in enum_code
 
 
+def test_cpp_codegen_generates_storage_structures_and_decoder():
+    funcs = sample_funcs()
+    c = CppCodeGen(funcs)
+    c.generate_code()
+
+    structures = c.get_storage_structures_code()
+    decoder = c.get_decoder_code()
+
+    assert 'struct Eventid_struct' in structures
+    assert 'uint64_t eventid' in structures
+    assert 'DecodeUint16' in decoder
+    assert 'DecodeString' in decoder
+    assert 'Decode_Store' in decoder
+    assert 'result.eventid = eventid' in decoder
+
+
 # ---------------------- Additional tests ----------------------
 
 def test_go_codegen_skips_short_params():
