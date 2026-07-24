@@ -117,6 +117,7 @@ with open(sys.argv[1]) as fp:
             print(exc)
     cppCodeGen = code_gen.CppCodeGen(functs)()
     goCodeGen = code_gen.GoCodeGen(functs)()
+    seastarCodeGen = code_gen.SeastarServerCodeGen(functs)()
     print(cppCodeGen.get_storage_enum_code())
     print(cppCodeGen.get_declarations_code())
     print(goCodeGen.get_storage_enum_code())
@@ -124,6 +125,7 @@ with open(sys.argv[1]) as fp:
     print(goCodeGen.get_storage_definitions_code())
 #    print(goCodeGen.get_storage_structures_code())
     print(goCodeGen.get_decoder_code())
+    print(seastarCodeGen.get_decoder_code())
     os.makedirs(project_root + "generated", exist_ok=True)
     os.makedirs(project_root + "generated/server", exist_ok=True)
     os.makedirs(project_root + "generated/server/storage", exist_ok=True)
@@ -131,6 +133,9 @@ with open(sys.argv[1]) as fp:
     os.makedirs(project_root + "generated/server/storage/clickhouse", exist_ok=True)
     os.makedirs(project_root + "generated/server/event_decoder", exist_ok=True)
     os.makedirs(project_root + "generated/client", exist_ok=True)
+    os.makedirs(project_root + "generated/seastar_based_server", exist_ok=True)
+    os.makedirs(project_root + "generated/seastar_based_server/storage", exist_ok=True)
+    os.makedirs(project_root + "generated/seastar_based_server/event_decoder", exist_ok=True)
     with open(project_root + "generated/server/storage/storage.go", "w") as storage_fp:
         storage_fp.write(goCodeGen.get_storage_enum_code())
         storage_fp.write(goCodeGen.get_storage_structures_code())
@@ -152,4 +157,22 @@ with open(sys.argv[1]) as fp:
         storage_fp.write(cppCodeGen.get_declarations_code())
     with open(project_root + "generated/server/event_decoder/event_decoder.go", "w") as storage_fp:
         storage_fp.write(goCodeGen.get_decoder_code())
+    with open(project_root + "generated/seastar_based_server/storage/storage.hh", "w") as storage_fp:
+        storage_fp.write("#pragma once\n\n")
+        storage_fp.write("#include <cstdint>\n")
+        storage_fp.write("#include <seastar/core/sstring.hh>\n\n")
+        storage_fp.write("namespace DistributedLogger {\n\n")
+        storage_fp.write(seastarCodeGen.get_storage_enum_code())
+        storage_fp.write("\n")
+        storage_fp.write(seastarCodeGen.get_storage_structures_code())
+        storage_fp.write("\n} // namespace DistributedLogger\n")
+    with open(project_root + "generated/seastar_based_server/event_decoder/event_decoder.hh", "w") \
+            as storage_fp:
+        storage_fp.write("#pragma once\n\n")
+        storage_fp.write("#include <tuple>\n")
+        storage_fp.write('#include "../storage/storage.hh"\n')
+        storage_fp.write('#include "../../../seastar_based_server/decoder.hh"\n\n')
+        storage_fp.write("namespace DistributedLogger {\n\n")
+        storage_fp.write(seastarCodeGen.get_decoder_code())
+        storage_fp.write("\n} // namespace DistributedLogger\n")
 #    print(str(cppCodeGen()))

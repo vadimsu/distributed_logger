@@ -350,3 +350,101 @@ class CppCodeGen(CodeGen):
 
     def get_storage_enum_code(self):
         return self._storage_enum_code
+
+
+class SeastarServerCodeGen(CodeGen):
+    """Generates C++ server-side code for the Seastar-based server.
+
+    Mirrors GoCodeGen's decoder generation, but targets the decode
+    primitives declared in seastar_based_server/decoder.hh
+    (DecodeUint64 / DecodeString operating on a seastar::temporary_buffer
+    and returning std::tuple<Type, int>, with -1 signaling an error).
+    """
+
+    def __init__(self, func_dict):
+        super().__init__(func_dict)
+        self._storage_enum_code = ""
+        self._storage_structures_code = ""
+        self._decoder_code = ""
+
+    @staticmethod
+    def get_cpp_type(param_type):
+        if param_type == "string":
+            return "seastar::sstring"
+        return param_type
+
+    def generate_code(self):
+        valid_funcs = [f for f in self._func_dict if len(f.get('params', [])) >= 1]
+
+        # Events enum (mirrors the enum generated for the client side)
+        enum_lines: List[str] = ["typedef enum {"]
+        for idx, f in enumerate(valid_funcs):
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            if idx != len(valid_funcs) - 1:
+                enum_lines.append(f"\t{event_name},")
+            else:
+                enum_lines.append(f"\t{event_name}")
+        enum_lines.append("} Events;")
+        self._storage_enum_code = "\n".join(enum_lines) + "\n"
+
+        # Struct definitions (one per event, equivalent to the Go storage structs)
+        struct_lines: List[str] = []
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            struct_name = event_name[0].upper() + event_name[1:] + "_struct"
+            struct_lines.append(f"struct {struct_name} {{")
+            for p in f['params']:
+                param_name, param_type = p[0], p[1]
+                struct_lines.append(f"\t{self.get_cpp_type(param_type)} {param_name};")
+            struct_lines.append("};")
+        self._storage_structures_code = "\n".join(struct_lines) + "\n"
+
+        # Decoder function generation
+        decoder_lines: List[str] = []
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            struct_name = event_name[0].upper() + event_name[1:] + "_struct"
+
+            decoder_lines.append("inline")
+            decoder_lines.append(
+                f"std::tuple<{struct_name}, int> Decode_{event_name}"
+                "(const seastar::temporary_buffer<char>& packet, size_t offset = 0) {"
+            )
+            decoder_lines.append("\tint decoded = 0;")
+            decoder_lines.append("\tint decodedThisTime = 0;")
+
+            for idx, p in enumerate(f['params']):
+                param_name, param_type = p[0], p[1]
+                cpp_type = self.get_cpp_type(param_type)
+
+                if idx == 0:
+                    # First parameter is the event ID
+                    decoder_lines.append(f"\t{cpp_type} {param_name} = Events::{param_name};")
+                    continue
+
+                decode_fn = "DecodeString" if param_type == "string" else "DecodeUint64"
+                decoder_lines.append(f"\t{cpp_type} {param_name};")
+                decoder_lines.append(
+                    f"\tstd::tie({param_name}, decodedThisTime) = {decode_fn}(packet, offset + decoded);"
+                )
+                decoder_lines.append("\tif (decodedThisTime < 0) {")
+                decoder_lines.append(f"\t\treturn {{{struct_name}{{}}, -1}};")
+                decoder_lines.append("\t}")
+                decoder_lines.append("\tdecoded += decodedThisTime;")
+
+            decoder_lines.append(f"\treturn {{{struct_name}{{")
+            for p in f['params']:
+                decoder_lines.append(f"\t\t\t{p[0]},")
+            decoder_lines.append("\t\t}, decoded};")
+            decoder_lines.append("}")
+
+        self._decoder_code = "\n".join(decoder_lines) + "\n"
+
+    def get_storage_enum_code(self):
+        return self._storage_enum_code
+
+    def get_storage_structures_code(self):
+        return self._storage_structures_code
+
+    def get_decoder_code(self):
+        return self._decoder_code
