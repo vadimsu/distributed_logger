@@ -366,12 +366,28 @@ class SeastarServerCodeGen(CodeGen):
         self._storage_enum_code = ""
         self._storage_structures_code = ""
         self._decoder_code = ""
+        self._clickhouse_definitions_code = ""
 
     @staticmethod
     def get_cpp_type(param_type):
         if param_type == "string":
             return "seastar::sstring"
         return param_type
+
+    @staticmethod
+    def get_field_name(param_name):
+        """Capitalized column/JSON-key name, matching the Go ClickHouse generator."""
+        return param_name[0].upper() + param_name[1:]
+
+    @staticmethod
+    def get_clickhouse_column_type(param_type):
+        if param_type == "uint64_t":
+            return "UInt64"
+        if param_type == "string":
+            return "String"
+        if param_type == "bool":
+            return "Bool"
+        return "String"
 
     def generate_code(self):
         valid_funcs = [f for f in self._func_dict if len(f.get('params', [])) >= 1]
@@ -440,6 +456,78 @@ class SeastarServerCodeGen(CodeGen):
 
         self._decoder_code = "\n".join(decoder_lines) + "\n"
 
+        # ClickHouse Flush() + GetMigrations() generation (HTTP client, per-event-type batches)
+        flush_lines: List[str] = [
+            "seastar::future<> ClickHouseStorage::Flush(std::vector<seastar::temporary_buffer<char>> batch) {",
+            "\treturn seastar::do_with(std::move(batch), std::map<int, seastar::sstring>{},",
+            "\t\t\t[this] (std::vector<seastar::temporary_buffer<char>>& batch, std::map<int, seastar::sstring>& rows_by_event) {",
+            "\t\tfor (auto& packet : batch) {",
+            "\t\t\tauto event_and_rc = DecodeUint64(packet);",
+            "\t\t\tif (std::get<1>(event_and_rc) == -1) {",
+            "\t\t\t\tcontinue;",
+            "\t\t\t}",
+            "\t\t\tswitch (std::get<0>(event_and_rc)) {",
+        ]
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            decoder_func_name = f"Decode_{event_name}"
+
+            flush_lines.append(f"\t\t\t\tcase Events::{event_name}: {{")
+            flush_lines.append(f"\t\t\t\t\tauto [decoded, rc] = {decoder_func_name}(packet, 8);")
+            flush_lines.append("\t\t\t\t\tif (rc == -1) {")
+            flush_lines.append("\t\t\t\t\t\tcontinue;")
+            flush_lines.append("\t\t\t\t\t}")
+            flush_lines.append("\t\t\t\t\tnlohmann::json row;")
+            for p in f['params'][1:]:
+                param_name, param_type = p[0], p[1]
+                field_name = self.get_field_name(param_name)
+                if param_type == "string":
+                    flush_lines.append(
+                        f'\t\t\t\t\trow["{field_name}"] = std::string(decoded.{param_name}.c_str(), decoded.{param_name}.size());'
+                    )
+                else:
+                    flush_lines.append(f'\t\t\t\t\trow["{field_name}"] = decoded.{param_name};')
+            flush_lines.append(f'\t\t\t\t\trows_by_event[Events::{event_name}] += seastar::sstring(row.dump()) + "\\n";')
+            flush_lines.append("\t\t\t\t\tbreak;")
+            flush_lines.append("\t\t\t\t}")
+        flush_lines.append("\t\t\t\tdefault:")
+        flush_lines.append("\t\t\t\t\tbreak;")
+        flush_lines.append("\t\t\t}")
+        flush_lines.append("\t\t}")
+        flush_lines.append("\t\treturn seastar::do_for_each(rows_by_event.begin(), rows_by_event.end(), [this] (auto& kv) {")
+        flush_lines.append("\t\t\tseastar::sstring table;")
+        flush_lines.append("\t\t\tswitch (kv.first) {")
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            flush_lines.append(f'\t\t\t\tcase Events::{event_name}: table = _table + "_{event_name}"; break;')
+        flush_lines.append("\t\t\t\tdefault:")
+        flush_lines.append("\t\t\t\t\treturn seastar::make_ready_future<>();")
+        flush_lines.append("\t\t\t}")
+        flush_lines.append('\t\t\treturn execute("INSERT INTO " + table + " FORMAT JSONEachRow", kv.second);')
+        flush_lines.append("\t\t});")
+        flush_lines.append("\t});")
+        flush_lines.append("}")
+
+        migrations_lines: List[str] = [
+            "std::vector<seastar::sstring> ClickHouseStorage::GetMigrations() {",
+            "\treturn {",
+        ]
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            cols: List[str] = []
+            for p in f['params'][1:]:
+                param_name, param_type = p[0], p[1]
+                field_name = self.get_field_name(param_name)
+                cols.append(f"{field_name} {self.get_clickhouse_column_type(param_type)}")
+            cols_str = ", ".join(cols)
+            migrations_lines.append(
+                f'\t\t"CREATE TABLE IF NOT EXISTS " + _table + "_{event_name} ({cols_str}) ENGINE = MergeTree() ORDER BY tuple()",'
+            )
+        migrations_lines.append("\t};")
+        migrations_lines.append("}")
+
+        self._clickhouse_definitions_code = "\n".join(flush_lines) + "\n\n" + "\n".join(migrations_lines) + "\n"
+
     def get_storage_enum_code(self):
         return self._storage_enum_code
 
@@ -448,3 +536,6 @@ class SeastarServerCodeGen(CodeGen):
 
     def get_decoder_code(self):
         return self._decoder_code
+
+    def get_clickhouse_definitions_code(self):
+        return self._clickhouse_definitions_code

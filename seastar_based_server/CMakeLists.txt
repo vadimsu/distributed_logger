@@ -12,6 +12,7 @@ include_directories(
 	../generated/seastar_based_server/event_decoder
 	../generated/seastar_based_server/storage
 	json/include
+	../generated/seastar_based_server/storage/clickhouse
 )
 link_directories(
 	seastar_server
@@ -23,6 +24,7 @@ find_package (Seastar REQUIRED)
 add_executable (
         seastar_server
         main.cc
+	storage.cc
 )
 
 target_link_libraries (

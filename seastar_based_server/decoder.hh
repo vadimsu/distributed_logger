@@ -11,7 +11,7 @@
 namespace DistributedLogger {
 
 // Decodes a uint16_t from Big Endian
-std::tuple<uint16_t, int> DecodeUint16(const seastar::temporary_buffer<char>& packet, size_t offset = 0) {
+inline static std::tuple<uint16_t, int> DecodeUint16(const seastar::temporary_buffer<char>& packet, size_t offset = 0) {
     if (packet.size() - offset < 2) {
         return {0, -1};
     }
@@ -24,7 +24,7 @@ std::tuple<uint16_t, int> DecodeUint16(const seastar::temporary_buffer<char>& pa
 }
 
 // Decodes a uint64_t from Big Endian
-std::tuple<uint64_t, int> DecodeUint64(const seastar::temporary_buffer<char>& packet, size_t offset = 0) {
+inline static std::tuple<uint64_t, int> DecodeUint64(const seastar::temporary_buffer<char>& packet, size_t offset = 0) {
     if (packet.size() - offset < 8) {
         return {0, -1};
     }
@@ -41,7 +41,7 @@ std::tuple<uint64_t, int> DecodeUint64(const seastar::temporary_buffer<char>& pa
 }
 
 // Decodes a string prefixed by its uint16 length
-std::tuple<seastar::sstring, int> DecodeString(const seastar::temporary_buffer<char>& packet, size_t offset = 0) {
+inline static std::tuple<seastar::sstring, int> DecodeString(const seastar::temporary_buffer<char>& packet, size_t offset = 0) {
     int decoded = 0;
 
     // 1. Decode string length prefix

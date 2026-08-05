@@ -126,13 +126,13 @@ namespace DistributedLogger {
 				}
 				fmt::print("StorageConfig type {} Username {} Password {} Host {} Port {} Dbname {} DataRetentionPeriod {}\n",_storageType,_username,_password,_host,_port,_dbname,_dataRetentionPeriod);
 			}
-			const seastar::sstring& getStorageType() { return _storageType; }
-			const seastar::sstring& getUsername() { return _username; }
-			const seastar::sstring& getPassword() { return _password; }
-			const seastar::sstring& getHost() { return _host; }
-			const seastar::sstring& getPort() { return _port; }
-			const seastar::sstring& getDbname() { return _dbname; }
-			const seastar::sstring& getDataRetentionPeriod() { return _dataRetentionPeriod; }
+			const seastar::sstring& getStorageType() const { return _storageType; }
+			const seastar::sstring& getUsername() const { return _username; }
+			const seastar::sstring& getPassword() const { return _password; }
+			const seastar::sstring& getHost() const { return _host; }
+			const seastar::sstring& getPort() const { return _port; }
+			const seastar::sstring& getDbname() const { return _dbname; }
+			const seastar::sstring& getDataRetentionPeriod() const { return _dataRetentionPeriod; }
 		private:
 			seastar::sstring _storageType;
 			seastar::sstring  _username;

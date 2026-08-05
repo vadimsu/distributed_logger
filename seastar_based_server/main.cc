@@ -1,4 +1,5 @@
 
+#include <unordered_map>
 #include <seastar/core/app-template.hh>
 #include <seastar/core/reactor.hh>
 #include <seastar/core/seastar.hh>
@@ -28,6 +29,16 @@ int main(int argc, char **argv){
 				std::vector<seastar::lw_shared_ptr<DistributedLogger::Listener>> listeners;
 				auto tcpAfHelper = std::make_shared<DistributedLogger::TcpAfHelper>(eventCollectorConfig.getIp(), atoi(eventCollectorConfig.getPort().c_str()));
 				auto listener = seastar::make_lw_shared<DistributedLogger::Listener>(tcpAfHelper);
+				std::unordered_map<seastar::sstring, seastar::sstring> storageParams;
+				const DistributedLogger::StorageConfig& storageConfig = config->getStorageConfig();
+				storageParams.emplace("StorageType", storageConfig.getStorageType());
+				storageParams.emplace("Host", storageConfig.getHost());
+				storageParams.emplace("Port", storageConfig.getPort());
+				storageParams.emplace("Dbname", storageConfig.getDbname());
+				storageParams.emplace("DataRetentionPeriod", storageConfig.getDataRetentionPeriod());
+				storageParams.emplace("Username", storageConfig.getUsername());
+				storageParams.emplace("Password", storageConfig.getPassword());
+				listener->setStorageParams(storageParams);
 				auto fut = listener->listen();
 				listeners.push_back(listener);
 				futs.push_back(std::move(fut));

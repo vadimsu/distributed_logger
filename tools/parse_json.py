@@ -135,6 +135,7 @@ with open(sys.argv[1]) as fp:
     os.makedirs(project_root + "generated/client", exist_ok=True)
     os.makedirs(project_root + "generated/seastar_based_server", exist_ok=True)
     os.makedirs(project_root + "generated/seastar_based_server/storage", exist_ok=True)
+    os.makedirs(project_root + "generated/seastar_based_server/storage/clickhouse", exist_ok=True)
     os.makedirs(project_root + "generated/seastar_based_server/event_decoder", exist_ok=True)
     with open(project_root + "generated/server/storage/storage.go", "w") as storage_fp:
         storage_fp.write(goCodeGen.get_storage_enum_code())
@@ -175,4 +176,15 @@ with open(sys.argv[1]) as fp:
         storage_fp.write("namespace DistributedLogger {\n\n")
         storage_fp.write(seastarCodeGen.get_decoder_code())
         storage_fp.write("\n} // namespace DistributedLogger\n")
+
+    # Also generate a C++/Seastar ClickHouse storage backend (HTTP client) for
+    # the seastar-based server, mirroring generated/server/storage/clickhouse/clickhouse.go
+    with open(project_root + "generated/seastar_based_server/storage/clickhouse/clickhouse.hh", "w") \
+            as storage_fp:
+        with open(project_root + "tools/codegen/templates/clickhouse_init.hh") as ch_init_fp:
+            ch_init = ch_init_fp.read()
+            storage_fp.write(ch_init)
+            storage_fp.write("\n")
+            storage_fp.write(seastarCodeGen.get_clickhouse_definitions_code())
+            storage_fp.write("\n} // namespace DistributedLogger\n")
 #    print(str(cppCodeGen()))

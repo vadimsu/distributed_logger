@@ -1,17 +1,20 @@
 #pragma once
 
-#include <vector>
+#include <unordered_map>
 #include <seastar/core/seastar.hh>
 #include "seastar/net/api.hh"
 #include <seastar/net/inet_address.hh>
 #include "connection.hh"
 #include "event_decoder.hh"
+#include "storage.hh"
 
 namespace DistributedLogger{
 
 	class Protocol : public seastar::enable_lw_shared_from_this<Protocol> {
 		public:
-			Protocol(seastar::socket_address addr): _addr(addr){}
+			Protocol(seastar::socket_address addr): _addr(addr){
+				_batch.reserve(10000);
+			}
 			~Protocol(){fmt::print("{} {}\n",__func__,__LINE__);}
 			seastar::future<> onAccepted(seastar::lw_shared_ptr<Connection> connection){
 				_connection = connection;
@@ -23,9 +26,9 @@ namespace DistributedLogger{
 					uint32_t data_len = 0;
 					memcpy(&data_len, length_prefix_tb.get(), sizeof(data_len));
 					data_len = ntohl(data_len);
-					fmt::print("received length prefix {}\n",data_len);
+//					fmt::print("received length prefix {}\n",data_len);
 					auto data_buffer_tb = co_await _connection->receive(data_len);
-					fmt::print("received data len{}\n",data_buffer_tb.size());
+//					fmt::print("received data len{}\n",data_buffer_tb.size());
 					if (data_buffer_tb.size() != data_len){
 						break;
 					}
@@ -33,8 +36,13 @@ namespace DistributedLogger{
 				}
 				co_return;
 			}
+			void setStorageParams(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
+				_storageParams = params;
+				_storage = Storage::Init(_storageParams);
+			}
 		private:
 			void process_accumulated_bytes(seastar::temporary_buffer<char> tb) {
+#if 0
 				auto event_and_rc = DecodeUint64(tb);
 				if (std::get<1>(event_and_rc) == -1){
 					fmt::print("failed to decoded event {}\n",std::get<1>(event_and_rc));
@@ -56,8 +64,18 @@ namespace DistributedLogger{
 					default:
 						fmt::print("unknown event {}\n",std::get<0>(event_and_rc));
 				}
+#else
+				_batch.push_back(std::move(tb));
+				if (_batch.size() == 10000){
+					_storage->Flush(std::move(_batch));
+					assert(_batch.size() == 0);
+				}
+#endif
 			}
 			seastar::socket_address _addr;
 			seastar::lw_shared_ptr<Connection> _connection;
+			std::unordered_map<seastar::sstring, seastar::sstring> _storageParams;
+			std::vector<seastar::temporary_buffer<char>> _batch;
+			std::shared_ptr<Storage> _storage;
 	};
 }
