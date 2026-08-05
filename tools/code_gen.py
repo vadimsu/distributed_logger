@@ -389,6 +389,16 @@ class SeastarServerCodeGen(CodeGen):
             return "Bool"
         return "String"
 
+    @staticmethod
+    def get_json_extract_fn(ch_column_type):
+        """ClickHouse JSONExtract* function matching a column type, used by the
+        materialized views that project `payload` into typed columns."""
+        return {
+            "UInt64": "JSONExtractUInt",
+            "String": "JSONExtractString",
+            "Bool": "JSONExtractBool",
+        }.get(ch_column_type, "JSONExtractString")
+
     def generate_code(self):
         valid_funcs = [f for f in self._func_dict if len(f.get('params', [])) >= 1]
 
@@ -456,9 +466,9 @@ class SeastarServerCodeGen(CodeGen):
 
         self._decoder_code = "\n".join(decoder_lines) + "\n"
 
-        # ClickHouse Flush() + GetMigrations() generation (HTTP client, per-event-type batches)
+        # ClickHouse Flush() + getMigrations() generation (HTTP client, per-event-type batches)
         flush_lines: List[str] = [
-            "seastar::future<> ClickHouseStorage::Flush(std::vector<seastar::temporary_buffer<char>> batch) {",
+            "seastar::future<> ClickHouseStorage::Flush(std::vector<seastar::temporary_buffer<char>>&& batch) {",
             "\treturn seastar::do_with(std::move(batch), std::map<int, seastar::sstring>{},",
             "\t\t\t[this] (std::vector<seastar::temporary_buffer<char>>& batch, std::map<int, seastar::sstring>& rows_by_event) {",
             "\t\tfor (auto& packet : batch) {",
@@ -471,15 +481,19 @@ class SeastarServerCodeGen(CodeGen):
         for f in valid_funcs:
             event_name = GoCodeGen.get_event_name(f['params'][0])
             decoder_func_name = f"Decode_{event_name}"
+            data_params = f['params'][1:]
 
             flush_lines.append(f"\t\t\t\tcase Events::{event_name}: {{")
             flush_lines.append(f"\t\t\t\t\tauto [decoded, rc] = {decoder_func_name}(packet, 8);")
             flush_lines.append("\t\t\t\t\tif (rc == -1) {")
             flush_lines.append("\t\t\t\t\t\tcontinue;")
             flush_lines.append("\t\t\t\t\t}")
+
+            # JSON encoding kept alongside the CSV encoding actually used below,
+            # so switching storage formats back only requires flipping the #if.
+            flush_lines.append("#if 0")
             flush_lines.append("\t\t\t\t\tnlohmann::json row;")
-            for p in f['params'][1:]:
-                param_name, param_type = p[0], p[1]
+            for param_name, param_type in data_params:
                 field_name = self.get_field_name(param_name)
                 if param_type == "string":
                     flush_lines.append(
@@ -488,6 +502,18 @@ class SeastarServerCodeGen(CodeGen):
                 else:
                     flush_lines.append(f'\t\t\t\t\trow["{field_name}"] = decoded.{param_name};')
             flush_lines.append(f'\t\t\t\t\trows_by_event[Events::{event_name}] += seastar::sstring(row.dump()) + "\\n";')
+            flush_lines.append("#else")
+            csv_fields: List[str] = []
+            for param_name, param_type in data_params:
+                if param_type == "string":
+                    csv_fields.append(
+                        f'seastar::sstring("\\"") + seastar::sstring(decoded.{param_name}.c_str(), decoded.{param_name}.size()) + seastar::sstring("\\"")'
+                    )
+                else:
+                    csv_fields.append(f"seastar::to_sstring(decoded.{param_name})")
+            csv_row = ' + seastar::sstring(", ") + '.join(csv_fields)
+            flush_lines.append(f'\t\t\t\t\trows_by_event[Events::{event_name}] += {csv_row} + seastar::sstring("\\n");')
+            flush_lines.append("#endif")
             flush_lines.append("\t\t\t\t\tbreak;")
             flush_lines.append("\t\t\t\t}")
         flush_lines.append("\t\t\t\tdefault:")
@@ -503,25 +529,37 @@ class SeastarServerCodeGen(CodeGen):
         flush_lines.append("\t\t\t\tdefault:")
         flush_lines.append("\t\t\t\t\treturn seastar::make_ready_future<>();")
         flush_lines.append("\t\t\t}")
-        flush_lines.append('\t\t\treturn execute("INSERT INTO " + table + " FORMAT JSONEachRow", kv.second);')
+        flush_lines.append('\t\t\treturn execute("INSERT INTO " + table + " FORMAT CSV", kv.second);')
         flush_lines.append("\t\t});")
         flush_lines.append("\t});")
         flush_lines.append("}")
 
+        # getMigrations() creates one typed table plus one materialized view
+        # (projecting the JSON payload column into it) per event type.
         migrations_lines: List[str] = [
-            "std::vector<seastar::sstring> ClickHouseStorage::GetMigrations() {",
+            "std::vector<seastar::sstring> ClickHouseStorage::getMigrations() {",
             "\treturn {",
         ]
         for f in valid_funcs:
             event_name = GoCodeGen.get_event_name(f['params'][0])
+            data_params = f['params'][1:]
             cols: List[str] = []
-            for p in f['params'][1:]:
-                param_name, param_type = p[0], p[1]
+            selects: List[str] = []
+            for param_name, param_type in data_params:
                 field_name = self.get_field_name(param_name)
-                cols.append(f"{field_name} {self.get_clickhouse_column_type(param_type)}")
+                ch_type = self.get_clickhouse_column_type(param_type)
+                cols.append(f"{field_name} {ch_type}")
+                extract_fn = self.get_json_extract_fn(ch_type)
+                selects.append(f"{extract_fn}(payload, '{field_name}') AS {field_name}")
             cols_str = ", ".join(cols)
+            selects_str = ", ".join(selects)
+
             migrations_lines.append(
-                f'\t\t"CREATE TABLE IF NOT EXISTS " + _table + "_{event_name} ({cols_str}) ENGINE = MergeTree() ORDER BY tuple()",'
+                f'\t\tfmt::format("CREATE TABLE IF NOT EXISTS {{}}_{event_name} ({cols_str}) ENGINE = MergeTree() ORDER BY tuple()", _table),'
+            )
+            migrations_lines.append(
+                f'\t\tfmt::format("CREATE MATERIALIZED VIEW IF NOT EXISTS mv_{{}}_{event_name} TO {{}}_{event_name} AS SELECT {selects_str} FROM {{}} WHERE event = {{}}", '
+                f'_table, _table, _table, Events::{event_name}),'
             )
         migrations_lines.append("\t};")
         migrations_lines.append("}")

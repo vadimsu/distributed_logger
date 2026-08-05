@@ -4,57 +4,60 @@
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/temporary_buffer.hh>
+#include <seastar/core/iostream.hh>
+#include <seastar/core/thread.hh>
 #include <seastar/net/inet_address.hh>
 #include <seastar/http/client.hh>
 #include <seastar/http/request.hh>
 #include <seastar/http/reply.hh>
 #include "nlohmann/json.hpp"
 #include "../storage.hh"
+#include "../../../seastar_based_server/storage.hh"
 #include "../../event_decoder/event_decoder.hh"
 #include <cstdlib>
 #include <map>
 #include <stdexcept>
 #include <string>
 #include <vector>
+#include <memory>
 
 namespace DistributedLogger {
 
 // HTTP based ClickHouse storage backend for the Seastar server.
 //
-// Init() allocates a seastar::http::experimental::client, connects it to the
-// ClickHouse HTTP interface (host/port are supplied as arguments, default
-// ClickHouse HTTP port is 8123) and ensures the generated per-event-type
-// tables exist.
+// The constructor connects a seastar::http::client to the ClickHouse HTTP
+// interface (host/port are supplied as arguments, default ClickHouse HTTP
+// port is 8123), creates the base "events" table and runs the generated
+// per-event-type migrations (typed tables + materialized views).
 //
 // Flush() groups a batch of decoded packets by event type and issues one
-// bulk INSERT (FORMAT JSONEachRow) per event type through the HTTP client,
+// bulk INSERT (FORMAT CSV) per event type through the HTTP client,
 // mirroring the way the Go clickhouse.Flush groups rows before sending them
 // to the server.
-class ClickHouseStorage : public seastar::enable_lw_shared_from_this<ClickHouseStorage> {
+class ClickHouseStorage : public Storage {
 public:
-	ClickHouseStorage(seastar::socket_address addr, seastar::sstring dbname,
+	ClickHouseStorage(seastar::sstring ip, seastar::sstring port, seastar::sstring dbname,
 			seastar::sstring username, seastar::sstring password)
-		: _addr(addr)
-		, _client(seastar::make_lw_shared<seastar::http::experimental::client>())
+		: _ip(ip)
+		, _port(port)
+		, _client(nullptr)
 		, _dbname(std::move(dbname))
 		, _username(std::move(username))
 		, _password(std::move(password))
 		, _table("events") {
+		auto sock = seastar::socket_address(ip, atoi(port.c_str()));
+		_client = seastar::make_lw_shared<seastar::http::client>(sock);
+		seastar::sstring query = "CREATE TABLE IF NOT EXISTS events (event UInt64, payload String) ENGINE = MergeTree() ORDER BY tuple()";
+		execute(query, "");
+		migrate();
 	}
 
 	// Connects the HTTP client to ClickHouse and runs the generated schema
 	// migrations. `host`/`port` describe the ClickHouse HTTP endpoint.
-	static seastar::future<seastar::lw_shared_ptr<ClickHouseStorage>> Init(
+	static std::shared_ptr<ClickHouseStorage> Init(
 			seastar::sstring host, seastar::sstring port, seastar::sstring dbname,
 			seastar::sstring username, seastar::sstring password) {
-		seastar::socket_address server_addr{seastar::ipv4_addr(std::string(host.c_str()), std::atoi(port.c_str()))};
-		auto storage = seastar::make_lw_shared<ClickHouseStorage>(server_addr, std::move(dbname), std::move(username), std::move(password));
-		return storage->_client->connect(server_addr).then([storage] (seastar::http::experimental::client::connection conn) {
-			storage->_connection = seastar::make_lw_shared<seastar::http::experimental::client::connection>(std::move(conn));
-			return storage->migrate(storage->GetMigrations());
-		}).then([storage] {
-			return storage;
-		});
+		return std::make_shared<ClickHouseStorage>(host, port, std::move(dbname), std::move(username), std::move(password));
 	}
 
 	// Runs a set of DDL statements (typed per-event tables) sequentially.
@@ -66,28 +69,38 @@ public:
 		});
 	}
 
-	// Executes a query against the ClickHouse HTTP interface. When `body` is
-	// non-empty it is streamed as the insert payload (e.g. FORMAT JSONEachRow
-	// rows), otherwise the request carries no body (DDL/migrations).
+	// Executes a query against the ClickHouse HTTP interface without waiting
+	// for the reply to be consumed by the caller. Used for the best-effort
+	// DDL statements run synchronously from the constructor.
 	seastar::future<> execute(seastar::sstring query, seastar::sstring body = seastar::sstring()) {
-		seastar::sstring uri = "/?query=" + url_encode(query);
-		if (!_dbname.empty()) {
-			uri += "&database=" + url_encode(_dbname);
+		seastar::sstring uri;
+		if (query != ""){
+		       uri = "/?query=" + url_encode(query);
 		}
-		return _client->make_request("POST", uri).then([this, body = std::move(body)] (auto req) mutable {
-			if (!_username.empty()) {
-				req._headers["X-ClickHouse-User"] = std::string(_username.c_str(), _username.size());
+		if (!_dbname.empty()) {
+			if (uri != ""){
+				uri += "&";
+			}else{
+				uri = "/?";
 			}
-			if (!_password.empty()) {
-				req._headers["X-ClickHouse-Key"] = std::string(_password.c_str(), _password.size());
-			}
-			if (!body.empty()) {
-				req._headers["Content-Type"] = "application/json";
-				req.set_body(std::string(body.c_str(), body.size()));
-			}
-			return req.send();
-		}).then([] (auto response) {
-			auto status = response.get_status();
+			uri += "database=" + url_encode(_dbname);
+		}
+		auto host = fmt::format("{}:{}",_ip,_port);
+		auto req = seastar::http::request::make("POST", host, uri);
+		if (!_username.empty()) {
+			req._headers["X-ClickHouse-User"] = std::string(_username.c_str(), _username.size());
+		}
+		if (!_password.empty()) {
+			req._headers["X-ClickHouse-Key"] = std::string(_password.c_str(), _password.size());
+		}
+		if (!body.empty()) {
+			req._headers["Content-Type"] = "text/plain";
+			req.write_body("text", body);
+		}else{
+			req._headers["Content-Length"] = "0";
+		}
+		return _client->make_request(std::move(req), [] (const seastar::http::reply& response, seastar::input_stream<char>&& in) {
+			auto status = response._status;
 			if (status != seastar::http::reply::status_type::ok) {
 				throw std::runtime_error("ClickHouse HTTP request failed with status " +
 						std::to_string(static_cast<int>(status)));
@@ -96,7 +109,7 @@ public:
 		});
 	}
 
-	seastar::future<> close() {
+	seastar::future<> close() override {
 		if (_connection) {
 			return _connection->close();
 		}
@@ -105,10 +118,7 @@ public:
 
 	// Groups the decoded packets in `batch` per event type and bulk inserts
 	// each group into its typed table via the HTTP client. Generated below.
-	seastar::future<> Flush(std::vector<seastar::temporary_buffer<char>> batch);
-
-	// Returns the DDL statements creating the typed per-event tables. Generated below.
-	std::vector<seastar::sstring> GetMigrations();
+	seastar::future<> Flush(std::vector<seastar::temporary_buffer<char>>&& batch) override;
 
 protected:
 	static seastar::sstring url_encode(const seastar::sstring& value) {
@@ -129,16 +139,32 @@ protected:
 		return seastar::sstring(out);
 	}
 
-	seastar::socket_address _addr;
-	seastar::lw_shared_ptr<seastar::http::experimental::client> _client;
-	seastar::lw_shared_ptr<seastar::http::experimental::client::connection> _connection;
+	// Runs the DDL statements creating the typed per-event tables and their
+	// materialized views (best-effort; errors surface as thrown exceptions
+	// from execute2 but are not otherwise handled here).
+	seastar::future<> migrate() {
+		auto stmts = getMigrations();
+		for (auto& st : stmts) {
+			execute2(st);
+		}
+		return seastar::make_ready_future<>();
+	}
+
+	// Returns the DDL statements creating the typed per-event tables and the
+	// materialized views projecting `payload` into typed columns. Generated below.
+	std::vector<seastar::sstring> getMigrations();
+
+	seastar::sstring _ip;
+	seastar::sstring _port;
+	seastar::lw_shared_ptr<seastar::http::client> _client;
+	seastar::lw_shared_ptr<seastar::http::connection> _connection;
 	seastar::sstring _dbname;
 	seastar::sstring _username;
 	seastar::sstring _password;
 	seastar::sstring _table;
 };
 
-// Flush() and GetMigrations() are generated below by SeastarServerCodeGen and
+// Flush() and getMigrations() are generated below by SeastarServerCodeGen and
 // defined out-of-line so they can be regenerated whenever the event schema
 // changes without touching the boilerplate above.
 
