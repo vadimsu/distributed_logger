@@ -145,7 +145,7 @@ protected:
 	seastar::future<> migrate() {
 		auto stmts = getMigrations();
 		for (auto& st : stmts) {
-			execute2(st);
+			execute(st);
 		}
 		return seastar::make_ready_future<>();
 	}
