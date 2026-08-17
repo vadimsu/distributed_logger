@@ -1,0 +1,11 @@
+{
+	"listener":{
+        	"port":"7777",
+	        "ip":"172.17.0.1"
+	},
+	"certificate":{
+		"server":"",
+		"key":"",
+		"root":""
+	}
+}

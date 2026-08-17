@@ -46,7 +46,7 @@ public:
 		, _password(std::move(password))
 		, _table("events") {
 		auto sock = seastar::socket_address(ip, atoi(port.c_str()));
-		_client = seastar::make_lw_shared<seastar::http::client>(sock);
+		_client = seastar::make_lw_shared<seastar::http::experimental::client>(sock);
 		seastar::sstring query = "CREATE TABLE IF NOT EXISTS events (event UInt64, payload String) ENGINE = MergeTree() ORDER BY tuple()";
 		execute(query, "");
 		migrate();
@@ -156,8 +156,8 @@ protected:
 
 	seastar::sstring _ip;
 	seastar::sstring _port;
-	seastar::lw_shared_ptr<seastar::http::client> _client;
-	seastar::lw_shared_ptr<seastar::http::connection> _connection;
+	seastar::lw_shared_ptr<seastar::http::experimental::client> _client;
+	seastar::lw_shared_ptr<seastar::http::experimental::connection> _connection;
 	seastar::sstring _dbname;
 	seastar::sstring _username;
 	seastar::sstring _password;

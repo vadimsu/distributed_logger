@@ -12,4 +12,8 @@ echo \
   sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 sudo apt update
 sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+#sudo apt install -y libmongoc-dev libbson-dev
+sudo apt install libbson-dev libbson-1.0-0
+sudo apt install libmongoc-dev libmongoc-1.0-0
+sudo apt install liblttng-ust-dev
 

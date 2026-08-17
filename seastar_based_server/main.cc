@@ -12,17 +12,19 @@ namespace bpo = boost::program_options;
 
 int main(int argc, char **argv){
 	seastar::app_template app;
+	fmt::print("{} {}\n",__FILE__,__LINE__);
         app.add_options()
                         ("config", bpo::value<seastar::sstring>()->default_value({}), "path to config file");
         return app.run_deprecated(argc, argv, [&app]{
                 auto& args = app.configuration();
+		fmt::print("{} {} \n",__FILE__,__LINE__);
                 //GdnsFileSync::filesyncapp = new distributed<GdnsFileSync::gdnsfilesync_app>();
 		seastar::lw_shared_ptr<DistributedLogger::Config> config = seastar::make_lw_shared<DistributedLogger::Config>(args["config"].as<seastar::sstring>());
 		seastar::engine().at_exit([] {
 			fmt::print("at_exist\n");
                         return seastar::make_ready_future<>();
                 });
-		fmt::print("main\n");
+		fmt::print("{} {}\n",__FILE__,__LINE__);
 		return config->read().then([config]{
 				const auto& eventCollectorConfig = config->getEventCollectorConfig();
 				std::vector<seastar::future<>> futs;
@@ -38,6 +40,7 @@ int main(int argc, char **argv){
 				storageParams.emplace("DataRetentionPeriod", storageConfig.getDataRetentionPeriod());
 				storageParams.emplace("Username", storageConfig.getUsername());
 				storageParams.emplace("Password", storageConfig.getPassword());
+				storageParams.emplace("WorkersBufferSize", config->getGeneralConfig().getWorkersBufferSize());
 				listener->setStorageParams(storageParams);
 				auto fut = listener->listen();
 				listeners.push_back(listener);

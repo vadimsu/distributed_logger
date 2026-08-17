@@ -1,0 +1,9 @@
+{
+	"StorageType":"clickhouse",
+        "Username":"",
+        "Password":"",
+	"Host":"172.20.0.3",
+        "Port":"8123",
+        "Dbname":"default",
+        "DataRetentionPeriod":"3"
+}

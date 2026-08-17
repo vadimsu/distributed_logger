@@ -12,11 +12,11 @@ namespace DistributedLogger{
 
 	class Protocol : public seastar::enable_lw_shared_from_this<Protocol> {
 		public:
-			Protocol(seastar::socket_address addr): _addr(addr){
-				_batch.reserve(10000);
+			Protocol(seastar::socket_address addr): _addr(addr), _batchSize(0){
 			}
 			~Protocol(){fmt::print("{} {}\n",__func__,__LINE__);}
 			seastar::future<> onAccepted(seastar::lw_shared_ptr<Connection> connection){
+				fmt::print("{} {}\n",__FILE__,__LINE__);
 				_connection = connection;
 				while(_connection->isAlive()){
 					auto  length_prefix_tb = co_await _connection->receive(4);
@@ -39,43 +39,26 @@ namespace DistributedLogger{
 			void setStorageParams(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
 				_storageParams = params;
 				_storage = Storage::Init(_storageParams);
+				auto it = _storageParams.find("WorkersBufferSize");
+				if (it != _storageParams.end()){
+					_batchSize = atoi(it->second.c_str());
+					_batch.reserve(_batchSize);
+				}
 			}
 		private:
 			void process_accumulated_bytes(seastar::temporary_buffer<char> tb) {
-#if 0
-				auto event_and_rc = DecodeUint64(tb);
-				if (std::get<1>(event_and_rc) == -1){
-					fmt::print("failed to decoded event {}\n",std::get<1>(event_and_rc));
-					return;
-				}
-				switch (std::get<0>(event_and_rc)){
-					case 0:
-						fmt::print("Event0\n");
-						{
-							auto event0_and_rc = Decode_event0(tb, 8);
-						}
-						break;
-					case 1:
-						fmt::print("Event1\n");
-						{
-							auto event1_and_rc = Decode_event1(tb, 8);
-						}
-						break;
-					default:
-						fmt::print("unknown event {}\n",std::get<0>(event_and_rc));
-				}
-#else
 				_batch.push_back(std::move(tb));
-				if (_batch.size() == 10000){
+				if (_batchSize == 0 || _batch.size() == _batchSize){
+					fmt::print("submitting {}\n",_batch.size());
 					_storage->Flush(std::move(_batch));
 					assert(_batch.size() == 0);
 				}
-#endif
 			}
 			seastar::socket_address _addr;
 			seastar::lw_shared_ptr<Connection> _connection;
 			std::unordered_map<seastar::sstring, seastar::sstring> _storageParams;
 			std::vector<seastar::temporary_buffer<char>> _batch;
 			std::shared_ptr<Storage> _storage;
+			unsigned _batchSize;
 	};
 }

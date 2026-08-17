@@ -1,0 +1,10 @@
+<clickhouse>
+    <users>
+        <default>
+	    <password></password>
+            <networks>
+                <ip>::/0</ip> <!-- Allows connections from any IP -->
+            </networks>
+        </default>
+    </users>
+</clickhouse>

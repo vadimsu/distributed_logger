@@ -144,7 +144,7 @@ namespace DistributedLogger {
 	};
 	class GeneralConfig : public ConfigReader {
 		public:
-			GeneralConfig():_storageConfigFileName(""), _eventCollectorFileName(""),_numberOfWorkers(0),_workersBufferSize(0){}
+			GeneralConfig():_storageConfigFileName(""), _eventCollectorFileName(""),_numberOfWorkers(""), _workersBufferSize("") {}
 			void onJsonPayload(nlohmann::json& jsonPayload) override{
 				fmt::print("Processing GeneralConfig configuration\n");
 				auto it = jsonPayload.find("StorageConfigFileName");
@@ -165,28 +165,31 @@ namespace DistributedLogger {
 				if (it != jsonPayload.end()){
 					auto numberOfWorkersS = to_string(*it);
 					numberOfWorkersS = numberOfWorkersS.substr(1, numberOfWorkersS.size() - 2);
-					_numberOfWorkers = atoi(numberOfWorkersS.c_str());
 				}
 				it = jsonPayload.find("WorkersBufferSize");
 				if (it != jsonPayload.end()){
 					auto workersBufferSizeS = to_string(*it);
 					workersBufferSizeS = workersBufferSizeS.substr(1, workersBufferSizeS.size() - 2);
-					_workersBufferSize = atoi(workersBufferSizeS.c_str());
 				}
 			}
 			const seastar::sstring& getStorageConfigFileName() { return _storageConfigFileName; }
 			const seastar::sstring& getEventCollectorFileName() { return _eventCollectorFileName; }
+			const seastar::sstring& getWorkersBufferSize() const { return _workersBufferSize; }
 		private:
 			seastar::sstring _storageConfigFileName;
 			seastar::sstring _eventCollectorFileName;
-			unsigned _numberOfWorkers;
-		        unsigned _workersBufferSize;
+			seastar::sstring _numberOfWorkers;
+			seastar::sstring _workersBufferSize;
 	};
 	class Config : public seastar::enable_lw_shared_from_this<Config> {
 		public:
-			Config(const seastar::sstring& json_file): _json_file(json_file){}
+			Config(const seastar::sstring& json_file): _json_file(json_file){
+				std::filesystem::path cwd = std::filesystem::current_path();
+				fmt::print("{}\n",cwd.string());
+			}
 			~Config(){fmt::print("{} {}\n",__func__,__LINE__);}
 			seastar::future<> read(){
+				fmt::print("{} {}\n",__func__,__LINE__);
 				return _generalConfig.readConfig(_json_file).then([this]{
 					auto fut1 = _storageConfig.readConfig(_generalConfig.getStorageConfigFileName());
 					auto fut2 = _eventCollectorConfig.readConfig(_generalConfig.getEventCollectorFileName());
