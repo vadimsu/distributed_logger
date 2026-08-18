@@ -5,11 +5,13 @@
 
 namespace DistributedLogger {
 
-std::shared_ptr<Storage> Storage::Init(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
+
+std::tuple<seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring> getParams(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
+	std::tuple<seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring> ret;
 	auto it = params.find("StorageType");
 	if (it == params.end()){
 		fmt::print("Cannot find StorageType\n");
-		return nullptr;
+		return ret;
 	}
 	if (it->second == "clickhouse"){
 		fmt::print("clickhouse\n");
@@ -17,34 +19,42 @@ std::shared_ptr<Storage> Storage::Init(const std::unordered_map<seastar::sstring
 		it = params.find("Host");
 		if (it == params.end()){
 			fmt::print("no Host provided\n");
-			return nullptr;
+			return ret;
 		}
-		ip = it->second;
-		seastar::sstring port;
+		std::get<0>(ret) = it->second;
 		it = params.find("Port");
 		if (it == params.end()){
 			fmt::print("No Port provided\n");
-			return nullptr;
+			return ret;
 		}
-		port = it->second;
-		seastar::sstring dbname, username, password;
+		std::get<1>(ret) = it->second;
 		it = params.find("Dbname");
 		if (it != params.end()){
-			dbname = it->second;
+			std::get<2>(ret) = it->second;
 		}
 		it = params.find("Username");
 		if (it != params.end()){
-			username = it->second;
+			std::get<3>(ret) = it->second;
 		}
 		it = params.find("Password");
 		if (it != params.end()){
-			password = it->second;
+			std::get<4>(ret) = it->second;
 		}
-		return ClickHouseStorage::Init(ip, port, dbname, username, password);
 	}else{
 		fmt::print("unknown storage {} \n", it->second);
 	}
-	return nullptr;
+	return ret;
+}
+
+
+std::shared_ptr<Storage> Storage::Init(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
+	auto par = getParams(params);
+	return ClickHouseStorage::Init(std::get<0>(par), std::get<1>(par), std::get<2>(par), std::get<3>(par), std::get<4>(par));
+}
+
+seastar::future<> Storage::globalInit(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
+	auto par = getParams(params);
+	return ClickHouseStorage::globalInit(std::get<0>(par), std::get<1>(par), std::get<2>(par), std::get<3>(par), std::get<4>(par));
 }
 
 }

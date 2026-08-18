@@ -44,12 +44,20 @@ public:
 		, _dbname(std::move(dbname))
 		, _username(std::move(username))
 		, _password(std::move(password))
-		, _table("events") {
+		, _table("events"){
 		auto sock = seastar::socket_address(ip, atoi(port.c_str()));
 		_client = seastar::make_lw_shared<seastar::http::experimental::client>(sock);
+	}
+
+	static seastar::future<> globalInit(seastar::sstring host, seastar::sstring port, seastar::sstring dbname, seastar::sstring username, seastar::sstring password){
+		auto client = std::make_shared<ClickHouseStorage>(host, port, std::move(dbname), std::move(username), std::move(password));
 		seastar::sstring query = "CREATE TABLE IF NOT EXISTS events (event UInt64, payload String) ENGINE = MergeTree() ORDER BY tuple()";
-		execute(query, "");
-		migrate();
+		return client->execute(query, "",true).then([client]{
+			auto stmts = client->getMigrations();
+			return client->migrate(stmts).then([client]{
+				return seastar::make_ready_future<>();
+			});
+		});
 	}
 
 	// Connects the HTTP client to ClickHouse and runs the generated schema
@@ -72,7 +80,7 @@ public:
 	// Executes a query against the ClickHouse HTTP interface without waiting
 	// for the reply to be consumed by the caller. Used for the best-effort
 	// DDL statements run synchronously from the constructor.
-	seastar::future<> execute(seastar::sstring query, seastar::sstring body = seastar::sstring()) {
+	seastar::future<> execute(seastar::sstring query, seastar::sstring body = seastar::sstring(), bool debug=false) {
 		seastar::sstring uri;
 		if (query != ""){
 		       uri = "/?query=" + url_encode(query);
@@ -99,11 +107,21 @@ public:
 		}else{
 			req._headers["Content-Length"] = "0";
 		}
-		return _client->make_request(std::move(req), [] (const seastar::http::reply& response, seastar::input_stream<char>&& in) {
+		return _client->make_request(std::move(req), [this, query, body, debug] (const seastar::http::reply& response, seastar::input_stream<char>&& in) {
 			auto status = response._status;
+			if (debug){
+				fmt::print("{} {} status {} query {} body {}\n",__FILE__,__LINE__,response._status,query,body);
+			}
+
 			if (status != seastar::http::reply::status_type::ok) {
-				throw std::runtime_error("ClickHouse HTTP request failed with status " +
-						std::to_string(static_cast<int>(status)));
+//				throw std::runtime_error("ClickHouse HTTP request failed with status " +
+//						std::to_string(static_cast<int>(status)));
+				fmt::print("{} {} {}\n",__FILE__,__LINE__,status);
+			}
+			return seastar::make_ready_future<>();
+		}).handle_exception([this, host, body, query, debug](auto ep) {
+			if (debug){
+				fmt::print("{} {} {} {} query {} body {}\n",__FILE__,__LINE__,ep,host,query,body);
 			}
 			return seastar::make_ready_future<>();
 		});
@@ -119,6 +137,10 @@ public:
 	// Groups the decoded packets in `batch` per event type and bulk inserts
 	// each group into its typed table via the HTTP client. Generated below.
 	seastar::future<> Flush(std::vector<seastar::temporary_buffer<char>>&& batch) override;
+
+	// Returns the DDL statements creating the typed per-event tables and the
+	// materialized views projecting `payload` into typed columns. Generated below.
+	std::vector<seastar::sstring> getMigrations();
 
 protected:
 	static seastar::sstring url_encode(const seastar::sstring& value) {
@@ -138,21 +160,6 @@ protected:
 		}
 		return seastar::sstring(out);
 	}
-
-	// Runs the DDL statements creating the typed per-event tables and their
-	// materialized views (best-effort; errors surface as thrown exceptions
-	// from execute2 but are not otherwise handled here).
-	seastar::future<> migrate() {
-		auto stmts = getMigrations();
-		for (auto& st : stmts) {
-			execute(st);
-		}
-		return seastar::make_ready_future<>();
-	}
-
-	// Returns the DDL statements creating the typed per-event tables and the
-	// materialized views projecting `payload` into typed columns. Generated below.
-	std::vector<seastar::sstring> getMigrations();
 
 	seastar::sstring _ip;
 	seastar::sstring _port;

@@ -7,6 +7,7 @@
 #include "config.hh"
 #include "tcp_af_helper.hh"
 #include "listener.hh"
+#include "storage.hh"
 
 namespace bpo = boost::program_options;
 
@@ -27,8 +28,6 @@ int main(int argc, char **argv){
 		fmt::print("{} {}\n",__FILE__,__LINE__);
 		return config->read().then([config]{
 				const auto& eventCollectorConfig = config->getEventCollectorConfig();
-				std::vector<seastar::future<>> futs;
-				std::vector<seastar::lw_shared_ptr<DistributedLogger::Listener>> listeners;
 				auto tcpAfHelper = std::make_shared<DistributedLogger::TcpAfHelper>(eventCollectorConfig.getIp(), atoi(eventCollectorConfig.getPort().c_str()));
 				auto listener = seastar::make_lw_shared<DistributedLogger::Listener>(tcpAfHelper);
 				std::unordered_map<seastar::sstring, seastar::sstring> storageParams;
@@ -41,16 +40,20 @@ int main(int argc, char **argv){
 				storageParams.emplace("Username", storageConfig.getUsername());
 				storageParams.emplace("Password", storageConfig.getPassword());
 				storageParams.emplace("WorkersBufferSize", config->getGeneralConfig().getWorkersBufferSize());
-				listener->setStorageParams(storageParams);
-				auto fut = listener->listen();
-				listeners.push_back(listener);
-				futs.push_back(std::move(fut));
+				DistributedLogger::Storage::globalInit(storageParams).then([storageParams, listener, config, port=eventCollectorConfig.getPort(), ip=eventCollectorConfig.getIp()] mutable{
+					std::vector<seastar::future<>> futs;
+					std::vector<seastar::lw_shared_ptr<DistributedLogger::Listener>> listeners;
+					listener->setStorageParams(storageParams);
+					auto fut = listener->listen();
+					listeners.push_back(listener);
+					futs.push_back(std::move(fut));
 
-				fmt::print("created listener {} {}\n",eventCollectorConfig.getIp(),eventCollectorConfig.getPort());
-				return when_all(futs.begin(),futs.end()).then([listeners, config] (auto futs){
-						fmt::print("{} {}\n",__FILE__,__LINE__);
-						return seastar::make_ready_future<>();
-					});
-			});
+					fmt::print("created listener {} {}\n", ip, port);
+					return when_all(futs.begin(),futs.end()).then([listeners, config] (auto futs){
+							fmt::print("{} {}\n",__FILE__,__LINE__);
+							return seastar::make_ready_future<>();
+						});
+				});
+		});
         });
 }

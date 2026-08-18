@@ -18,41 +18,46 @@ namespace DistributedLogger{
 			seastar::future<> onAccepted(seastar::lw_shared_ptr<Connection> connection){
 				fmt::print("{} {}\n",__FILE__,__LINE__);
 				_connection = connection;
-				while(_connection->isAlive()){
-					auto  length_prefix_tb = co_await _connection->receive(4);
-					if (length_prefix_tb.size() != 4){
-						break;
-					}
-					uint32_t data_len = 0;
-					memcpy(&data_len, length_prefix_tb.get(), sizeof(data_len));
-					data_len = ntohl(data_len);
-//					fmt::print("received length prefix {}\n",data_len);
-					auto data_buffer_tb = co_await _connection->receive(data_len);
-//					fmt::print("received data len{}\n",data_buffer_tb.size());
-					if (data_buffer_tb.size() != data_len){
-						break;
-					}
-					process_accumulated_bytes(std::move(data_buffer_tb));
-				}
-				co_return;
-			}
-			void setStorageParams(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
-				_storageParams = params;
 				_storage = Storage::Init(_storageParams);
 				auto it = _storageParams.find("WorkersBufferSize");
 				if (it != _storageParams.end()){
 					_batchSize = atoi(it->second.c_str());
 					_batch.reserve(_batchSize);
 				}
+				try {
+					while(_connection->isAlive()){
+						auto  length_prefix_tb = co_await _connection->receive(4);
+						if (length_prefix_tb.size() != 4){
+							break;
+						}
+						uint32_t data_len = 0;
+						memcpy(&data_len, length_prefix_tb.get(), sizeof(data_len));
+						data_len = ntohl(data_len);
+//						fmt::print("received length prefix {}\n",data_len);
+						auto data_buffer_tb = co_await _connection->receive(data_len);
+//						fmt::print("received data len{}\n",data_buffer_tb.size());
+						if (data_buffer_tb.size() != data_len){
+							break;
+						}
+						co_await process_accumulated_bytes(std::move(data_buffer_tb));
+					}
+				}catch(std::exception_ptr e){
+					fmt::print("{} {} {}\n",__FILE__,__LINE__,e);
+				}
+				co_return;
+			}
+			void setStorageParams(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
+				_storageParams = params;
 			}
 		private:
-			void process_accumulated_bytes(seastar::temporary_buffer<char> tb) {
+			seastar::future<> process_accumulated_bytes(seastar::temporary_buffer<char> tb) {
 				_batch.push_back(std::move(tb));
 				if (_batchSize == 0 || _batch.size() == _batchSize){
-					fmt::print("submitting {}\n",_batch.size());
-					_storage->Flush(std::move(_batch));
-					assert(_batch.size() == 0);
+//					fmt::print("submitting {}\n",_batch.size());
+					return _storage->Flush(std::move(_batch));
+//					assert(_batch.size() == 0);
 				}
+				return seastar::make_ready_future<>();
 			}
 			seastar::socket_address _addr;
 			seastar::lw_shared_ptr<Connection> _connection;
