@@ -20,7 +20,7 @@ services:
   server:
     build:
       context: ..
-      dockerfile: /home/vsuraev/distributed_logger/docker/server_seastar.Dockerfile
+      dockerfile: ./docker/server_seastar.Dockerfile
     depends_on:
       clickhouse:
         condition: service_healthy
@@ -47,7 +47,7 @@ services:
   client:
     build:
       context: ..
-      dockerfile: /home/vsuraev/distributed_logger/docker/client.Dockerfile
+      dockerfile: ./docker/client.Dockerfile
     depends_on:
       server:
         condition: service_healthy
