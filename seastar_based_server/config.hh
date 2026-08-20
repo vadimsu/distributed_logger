@@ -169,7 +169,7 @@ namespace DistributedLogger {
 				it = jsonPayload.find("WorkersBufferSize");
 				if (it != jsonPayload.end()){
 					auto workersBufferSizeS = to_string(*it);
-					workersBufferSizeS = workersBufferSizeS.substr(1, workersBufferSizeS.size() - 2);
+					_workersBufferSize = workersBufferSizeS.substr(1, workersBufferSizeS.size() - 2);
 				}
 			}
 			const seastar::sstring& getStorageConfigFileName() { return _storageConfigFileName; }

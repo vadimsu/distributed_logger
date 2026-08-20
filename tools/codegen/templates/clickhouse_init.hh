@@ -52,7 +52,7 @@ public:
 	static seastar::future<> globalInit(seastar::sstring host, seastar::sstring port, seastar::sstring dbname, seastar::sstring username, seastar::sstring password){
 		auto client = std::make_shared<ClickHouseStorage>(host, port, std::move(dbname), std::move(username), std::move(password));
 		seastar::sstring query = "CREATE TABLE IF NOT EXISTS events (event UInt64, payload String) ENGINE = MergeTree() ORDER BY tuple()";
-		return client->execute(query, "",true).then([client]{
+		return client->execute("", query, true).then([client]{
 			auto stmts = client->getMigrations();
 			return client->migrate(stmts).then([client]{
 				return seastar::make_ready_future<>();
@@ -71,11 +71,23 @@ public:
 	// Runs a set of DDL statements (typed per-event tables) sequentially.
 	seastar::future<> migrate(std::vector<seastar::sstring> stmts) {
 		return seastar::do_with(std::move(stmts), [this] (std::vector<seastar::sstring>& stmts) {
-			return seastar::do_for_each(stmts, [this] (seastar::sstring& stmt) {
-				return execute(stmt);
+			return seastar::do_for_each(stmts.begin(), stmts.end(), [this] (seastar::sstring& stmt) {
+				return execute("", stmt, true).then([]{
+					return seastar::make_ready_future<>();
+				});
 			});
 		});
 	}
+
+	struct printer {
+                seastar::future<seastar::consumption_result<char>> operator() (seastar::temporary_buffer<char> buf) {
+                        if (buf.empty()) {
+                                return seastar::make_ready_future<seastar::consumption_result<char>>(seastar::stop_consuming(std::move(buf)));
+                        }
+                        fmt::print("{}", seastar::sstring(buf.get(), buf.size()));
+                        return seastar::make_ready_future<seastar::consumption_result<char>>(seastar::continue_consuming());
+                }
+        };
 
 	// Executes a query against the ClickHouse HTTP interface without waiting
 	// for the reply to be consumed by the caller. Used for the best-effort
@@ -101,24 +113,25 @@ public:
 		if (!_password.empty()) {
 			req._headers["X-ClickHouse-Key"] = std::string(_password.c_str(), _password.size());
 		}
+		req._headers["Content-Type"] = "application/x-www-form-urlencoded";
 		if (!body.empty()) {
-			req._headers["Content-Type"] = "text/plain";
 			req.write_body("text", body);
 		}else{
 			req._headers["Content-Length"] = "0";
 		}
-		return _client->make_request(std::move(req), [this, query, body, debug] (const seastar::http::reply& response, seastar::input_stream<char>&& in) {
+		co_return co_await _client->make_request(std::move(req), [this, query, body, debug] (const seastar::http::reply& response, seastar::input_stream<char>&& in) -> seastar::future<>{
 			auto status = response._status;
 			if (debug){
 				fmt::print("{} {} status {} query {} body {}\n",__FILE__,__LINE__,response._status,query,body);
 			}
 
 			if (status != seastar::http::reply::status_type::ok) {
-//				throw std::runtime_error("ClickHouse HTTP request failed with status " +
-//						std::to_string(static_cast<int>(status)));
 				fmt::print("{} {} {}\n",__FILE__,__LINE__,status);
 			}
-			return seastar::make_ready_future<>();
+			co_return co_await seastar::async([in = std::move(in)] () mutable {
+                                in.consume(printer{}).get();
+                                in.close().get();
+                        });
 		}).handle_exception([this, host, body, query, debug](auto ep) {
 			if (debug){
 				fmt::print("{} {} {} {} query {} body {}\n",__FILE__,__LINE__,ep,host,query,body);

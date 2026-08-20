@@ -34,7 +34,7 @@ target_link_libraries (
 	ssl
 	bsoncxx
 )
-set(CMAKE_CXX_FLAGS "-O0 -ggdb")
+set(CMAKE_CXX_FLAGS "-O3")
 set_target_properties(seastar_server
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

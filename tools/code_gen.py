@@ -139,7 +139,7 @@ class GoCodeGen(CodeGen):
         flush_method = "func (s *ClickHouseStorage) Flush(batch [][]byte)(error){\n"
         flush_method += "\tvar err error = nil\n"
         flush_method += "\tb, err := s.conn.PrepareBatch(context.Background(),\n"
-        flush_method += '\t\tfmt.Sprintf("INSERT INTO %s (event, payload)", s.table))\n'
+        flush_method += '\t\tfmt.Sprintf("INSERT INTO %s.%s (event, payload)", s.dbname, s.table))\n'
         flush_method += "\tif err != nil {\n"
         flush_method += "\t\tfmt.Println(err)\n"
         flush_method += "\t\treturn err\n"
@@ -222,12 +222,12 @@ class GoCodeGen(CodeGen):
             
             # DDL for typed table
             cols_str = ", ".join(cols)
-            ddl = f'fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s_{event_name} ({cols_str}) ENGINE = MergeTree() ORDER BY tuple()", s.table),'
+            ddl = f'fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s_{event_name} ({cols_str}) ENGINE = MergeTree() ORDER BY tuple()", s.dbname, s.table),'
             migrations_lines.append(f"\t\t{ddl}")
             
             # Materialized view
             json_extracts_str = ", ".join(json_extracts)
-            mv = f'fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS mv_%s_{event_name} TO %s_{event_name} AS SELECT {json_extracts_str} FROM %s WHERE event = %d", s.table, s.table, s.table, storage.{struct_name[:-7]})'
+            mv = f'fmt.Sprintf("CREATE MATERIALIZED VIEW IF NOT EXISTS %s.mv_%s_{event_name} TO %s.%s_{event_name} AS SELECT {json_extracts_str} FROM %s.%s WHERE event = %d", s.dbname, s.table, s.dbname, s.table, s.dbname, s.table, storage.{struct_name[:-7]})'
             migrations_lines.append(f"\t\t{mv},")
         
         migrations_lines.append("\t}")
@@ -491,7 +491,6 @@ class SeastarServerCodeGen(CodeGen):
 
             # JSON encoding kept alongside the CSV encoding actually used below,
             # so switching storage formats back only requires flipping the #if.
-            flush_lines.append("#if 0")
             flush_lines.append("\t\t\t\t\tnlohmann::json row;")
             for param_name, param_type in data_params:
                 field_name = self.get_field_name(param_name)
@@ -501,19 +500,7 @@ class SeastarServerCodeGen(CodeGen):
                     )
                 else:
                     flush_lines.append(f'\t\t\t\t\trow["{field_name}"] = decoded.{param_name};')
-            flush_lines.append(f'\t\t\t\t\trows_by_event[Events::{event_name}] += seastar::sstring(row.dump()) + "\\n";')
-            flush_lines.append("#else")
-            csv_fields: List[str] = []
-            for param_name, param_type in data_params:
-                if param_type == "string":
-                    csv_fields.append(
-                        f'seastar::sstring("\\"") + seastar::sstring(decoded.{param_name}.c_str(), decoded.{param_name}.size()) + seastar::sstring("\\"")'
-                    )
-                else:
-                    csv_fields.append(f"seastar::to_sstring(decoded.{param_name})")
-            csv_row = ' + seastar::sstring(", ") + '.join(csv_fields)
-            flush_lines.append(f'\t\t\t\t\trows_by_event[Events::{event_name}] += {csv_row} + seastar::sstring("\\n");')
-            flush_lines.append("#endif")
+            flush_lines.append(f'\t\t\t\t\trows_by_event[Events::{event_name}] += "(" + seastar::to_sstring(Events::{event_name}) + ", \'" + seastar::sstring(row.dump()) + "\'),\\n";')
             flush_lines.append("\t\t\t\t\tbreak;")
             flush_lines.append("\t\t\t\t}")
         flush_lines.append("\t\t\t\tdefault:")
@@ -521,15 +508,7 @@ class SeastarServerCodeGen(CodeGen):
         flush_lines.append("\t\t\t}")
         flush_lines.append("\t\t}")
         flush_lines.append("\t\treturn seastar::do_for_each(rows_by_event.begin(), rows_by_event.end(), [this] (auto& kv) {")
-        flush_lines.append("\t\t\tseastar::sstring table;")
-        flush_lines.append("\t\t\tswitch (kv.first) {")
-        for f in valid_funcs:
-            event_name = GoCodeGen.get_event_name(f['params'][0])
-            flush_lines.append(f'\t\t\t\tcase Events::{event_name}: table = _table + "_{event_name}"; break;')
-        flush_lines.append("\t\t\t\tdefault:")
-        flush_lines.append("\t\t\t\t\treturn seastar::make_ready_future<>();")
-        flush_lines.append("\t\t\t}")
-        flush_lines.append('\t\t\treturn execute("INSERT INTO " + table + " FORMAT CSV", kv.second);')
+        flush_lines.append('\t\t\treturn execute("INSERT INTO " + _table + " (event, payload) SETTINGS async_insert=1 FORMAT Values", kv.second);')
         flush_lines.append("\t\t});")
         flush_lines.append("\t});")
         flush_lines.append("}")
