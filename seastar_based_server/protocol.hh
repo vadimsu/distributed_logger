@@ -14,9 +14,8 @@ namespace DistributedLogger{
 		public:
 			Protocol(seastar::socket_address addr): _addr(addr), _batchSize(0){
 			}
-			~Protocol(){fmt::print("{} {}\n",__func__,__LINE__);}
+			~Protocol(){}
 			seastar::future<> onAccepted(seastar::lw_shared_ptr<Connection> connection){
-				fmt::print("{} {}\n",__FILE__,__LINE__);
 				_connection = connection;
 				_storage = Storage::Init(_storageParams);
 				auto it = _storageParams.find("WorkersBufferSize");
@@ -33,9 +32,7 @@ namespace DistributedLogger{
 						uint32_t data_len = 0;
 						memcpy(&data_len, length_prefix_tb.get(), sizeof(data_len));
 						data_len = ntohl(data_len);
-//						fmt::print("received length prefix {}\n",data_len);
 						auto data_buffer_tb = co_await _connection->receive(data_len);
-//						fmt::print("received data len{}\n",data_buffer_tb.size());
 						if (data_buffer_tb.size() != data_len){
 							break;
 						}
@@ -53,9 +50,15 @@ namespace DistributedLogger{
 			seastar::future<> process_accumulated_bytes(seastar::temporary_buffer<char> tb) {
 				_batch.push_back(std::move(tb));
 				if (_batchSize == 0 || _batch.size() == _batchSize){
-//					fmt::print("submitting {}\n",_batch.size());
+					_batchTimer.cancel();
 					return _storage->Flush(std::move(_batch));
-//					assert(_batch.size() == 0);
+				}
+				if (!_batchTimer.armed()){
+					_batchTimer.set_callback([this] {
+							if (_batch.size() > 0){
+								_storage->Flush(std::move(_batch));
+							}
+						});
 				}
 				return seastar::make_ready_future<>();
 			}
@@ -65,5 +68,6 @@ namespace DistributedLogger{
 			std::vector<seastar::temporary_buffer<char>> _batch;
 			std::shared_ptr<Storage> _storage;
 			unsigned _batchSize;
+			seastar::timer<> _batchTimer;
 	};
 }

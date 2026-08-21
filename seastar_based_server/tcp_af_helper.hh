@@ -18,13 +18,13 @@ namespace DistributedLogger{
 				seastar::net::dns_resolver resolver;
     
 				return resolver.resolve_name(_host).then([this] (seastar::net::inet_address addr) {
-					fmt::print("Resolved IP: {}\n", addr);
 					_address = seastar::make_ipv4_address({addr, _port});
 				}).finally([resolver0 = std::move(resolver),this] () mutable {
 					return resolver0.close().then([this]{
 						seastar::listen_options lo;
 						lo.reuse_address = true;
-						lo.set_fixed_cpu(seastar::this_shard_id());
+						lo.lba = seastar::server_socket::load_balancing_algorithm::connection_distribution;
+//						lo.set_fixed_cpu(seastar::this_shard_id());//for stack-per-shard option
 						_listener = seastar::listen(getAddress(), lo);
 						return seastar::make_ready_future<>();
 					});

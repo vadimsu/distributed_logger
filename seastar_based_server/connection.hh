@@ -12,7 +12,7 @@ namespace DistributedLogger{
 		public:
 			Connection(seastar::connected_socket fd, seastar::socket_address addr): _fd(std::move(fd)), _addr(addr), _in(_fd.input()), _out(_fd.output()) {
 			}
-			~Connection(){fmt::print("{} {}\n",__func__,__LINE__);}
+			~Connection(){}
 			seastar::future<seastar::temporary_buffer<char>> receive(uint32_t len){
 				try{
 					if (_in.eof()){

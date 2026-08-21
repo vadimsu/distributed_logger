@@ -34,7 +34,7 @@ services:
     security_opt:
       - seccomp:unconfined # Often needed to allow NUMA-related syscalls
     # Restrict resources to match Seastar's sharding
-    cpus: 4
+    cpus: 16
     mem_limit: 32g
     privileged: true
     healthcheck:

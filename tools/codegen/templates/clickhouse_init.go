@@ -33,6 +33,10 @@ func Init(args ...any) (*ClickHouseStorage, error){
 		fmt.Println("on clickhouse connection ",err)
 		return nil, err
 	}
+//	err = conn.Exec(context.Background(),fmt.Sprintf("USE %s",dbname))
+//	if err != nil {
+//		fmt.Println(err)
+//	}
 	table := "events"
 	// ensure a single JSON payload table exists for this shard
 	create := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s.%s (event UInt64, payload String) ENGINE = MergeTree() ORDER BY tuple()", dbname, table)

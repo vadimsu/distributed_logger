@@ -49,13 +49,17 @@ public:
 		_client = seastar::make_lw_shared<seastar::http::experimental::client>(sock);
 	}
 
+	seastar::future<> close(){
+		return _client->close();
+	}
+
 	static seastar::future<> globalInit(seastar::sstring host, seastar::sstring port, seastar::sstring dbname, seastar::sstring username, seastar::sstring password){
 		auto client = std::make_shared<ClickHouseStorage>(host, port, std::move(dbname), std::move(username), std::move(password));
 		seastar::sstring query = "CREATE TABLE IF NOT EXISTS events (event UInt64, payload String) ENGINE = MergeTree() ORDER BY tuple()";
 		return client->execute("", query, true).then([client]{
 			auto stmts = client->getMigrations();
 			return client->migrate(stmts).then([client]{
-				return seastar::make_ready_future<>();
+				return client->close();
 			});
 		});
 	}
@@ -140,13 +144,6 @@ public:
 		});
 	}
 
-	seastar::future<> close() override {
-		if (_connection) {
-			return _connection->close();
-		}
-		return seastar::make_ready_future<>();
-	}
-
 	// Groups the decoded packets in `batch` per event type and bulk inserts
 	// each group into its typed table via the HTTP client. Generated below.
 	seastar::future<> Flush(std::vector<seastar::temporary_buffer<char>>&& batch) override;
@@ -177,7 +174,6 @@ protected:
 	seastar::sstring _ip;
 	seastar::sstring _port;
 	seastar::lw_shared_ptr<seastar::http::experimental::client> _client;
-	seastar::lw_shared_ptr<seastar::http::experimental::connection> _connection;
 	seastar::sstring _dbname;
 	seastar::sstring _username;
 	seastar::sstring _password;
