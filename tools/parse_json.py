@@ -187,4 +187,15 @@ with open(sys.argv[1]) as fp:
             storage_fp.write("\n")
             storage_fp.write(seastarCodeGen.get_clickhouse_definitions_code())
             storage_fp.write("\n} // namespace DistributedLogger\n")
+
+    # Native-TCP-protocol counterpart of the ClickHouse storage backend above,
+    # selected at runtime via the "Protocol" storage config field (see storage.cc).
+    with open(project_root + "generated/seastar_based_server/storage/clickhouse/clickhouse_native.hh", "w") \
+            as storage_fp:
+        with open(project_root + "tools/codegen/templates/clickhouse_native_init.hh") as ch_init_fp:
+            ch_init = ch_init_fp.read()
+            storage_fp.write(ch_init)
+            storage_fp.write("\n")
+            storage_fp.write(seastarCodeGen.get_clickhouse_native_definitions_code())
+            storage_fp.write("\n} // namespace DistributedLogger\n")
 #    print(str(cppCodeGen()))

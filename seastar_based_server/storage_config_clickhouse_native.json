@@ -1,0 +1,11 @@
+{
+	"StorageType":"clickhouse",
+        "Username":"default",
+        "Password":"default",
+        "noHost":"172.17.0.1",
+	"Host":"127.0.0.1",
+        "Port":"9000",
+        "Dbname":"events",
+        "DataRetentionPeriod":"3",
+        "Protocol":"native"
+}

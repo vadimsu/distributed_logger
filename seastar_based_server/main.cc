@@ -35,6 +35,7 @@ int main(int argc, char **argv){
 				storageParams.emplace("DataRetentionPeriod", storageConfig.getDataRetentionPeriod());
 				storageParams.emplace("Username", storageConfig.getUsername());
 				storageParams.emplace("Password", storageConfig.getPassword());
+				storageParams.emplace("Protocol", storageConfig.getProtocol());
 				storageParams.emplace("WorkersBufferSize", config->getGeneralConfig().getWorkersBufferSize());
 				return DistributedLogger::Storage::globalInit(storageParams).then([storageParams, config, port=eventCollectorConfig.getPort(), ip=eventCollectorConfig.getIp()] mutable{
 					seastar::distributed<DistributedLogger::Listener> *listener = new seastar::distributed<DistributedLogger::Listener>();

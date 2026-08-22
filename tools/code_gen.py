@@ -367,6 +367,7 @@ class SeastarServerCodeGen(CodeGen):
         self._storage_structures_code = ""
         self._decoder_code = ""
         self._clickhouse_definitions_code = ""
+        self._clickhouse_native_definitions_code = ""
 
     @staticmethod
     def get_cpp_type(param_type):
@@ -545,6 +546,87 @@ class SeastarServerCodeGen(CodeGen):
 
         self._clickhouse_definitions_code = "\n".join(flush_lines) + "\n\n" + "\n".join(migrations_lines) + "\n"
 
+        # ClickHouseNativeStorage::Flush() + getMigrations() generation (native TCP
+        # protocol client, per-event-type batches). Same decode/dispatch shape as the
+        # HTTP version above, but instead of building a formatted VALUES-clause string
+        # it accumulates (event id, JSON payload) pairs and hands them to insertRows(),
+        # which encodes them as a native-protocol Block. getMigrations() runs the same
+        # DDL as the HTTP backend (materialized views populate the typed tables either way).
+        native_flush_lines: List[str] = [
+            "seastar::future<> ClickHouseNativeStorage::Flush(std::vector<seastar::temporary_buffer<char>>&& batch) {",
+            "\treturn seastar::do_with(std::move(batch), std::map<int, std::vector<std::pair<uint64_t, seastar::sstring>>>{},",
+            "\t\t\t[this] (std::vector<seastar::temporary_buffer<char>>& batch, std::map<int, std::vector<std::pair<uint64_t, seastar::sstring>>>& rows_by_event) {",
+            "\t\tfor (auto& packet : batch) {",
+            "\t\t\tauto event_and_rc = DecodeUint64(packet);",
+            "\t\t\tif (std::get<1>(event_and_rc) == -1) {",
+            "\t\t\t\tcontinue;",
+            "\t\t\t}",
+            "\t\t\tswitch (std::get<0>(event_and_rc)) {",
+        ]
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            decoder_func_name = f"Decode_{event_name}"
+            data_params = f['params'][1:]
+
+            native_flush_lines.append(f"\t\t\t\tcase Events::{event_name}: {{")
+            native_flush_lines.append(f"\t\t\t\t\tauto [decoded, rc] = {decoder_func_name}(packet, 8);")
+            native_flush_lines.append("\t\t\t\t\tif (rc == -1) {")
+            native_flush_lines.append("\t\t\t\t\t\tcontinue;")
+            native_flush_lines.append("\t\t\t\t\t}")
+            native_flush_lines.append("\t\t\t\t\tnlohmann::json row;")
+            for param_name, param_type in data_params:
+                field_name = self.get_field_name(param_name)
+                if param_type == "string":
+                    native_flush_lines.append(
+                        f'\t\t\t\t\trow["{field_name}"] = std::string(decoded.{param_name}.c_str(), decoded.{param_name}.size());'
+                    )
+                else:
+                    native_flush_lines.append(f'\t\t\t\t\trow["{field_name}"] = decoded.{param_name};')
+            native_flush_lines.append(
+                f'\t\t\t\t\trows_by_event[Events::{event_name}].emplace_back((uint64_t)Events::{event_name}, seastar::sstring(row.dump()));'
+            )
+            native_flush_lines.append("\t\t\t\t\tbreak;")
+            native_flush_lines.append("\t\t\t\t}")
+        native_flush_lines.append("\t\t\t\tdefault:")
+        native_flush_lines.append("\t\t\t\t\tbreak;")
+        native_flush_lines.append("\t\t\t}")
+        native_flush_lines.append("\t\t}")
+        native_flush_lines.append("\t\treturn seastar::do_for_each(rows_by_event.begin(), rows_by_event.end(), [this] (auto& kv) {")
+        native_flush_lines.append("\t\t\treturn insertRows(std::move(kv.second));")
+        native_flush_lines.append("\t\t});")
+        native_flush_lines.append("\t});")
+        native_flush_lines.append("}")
+
+        native_migrations_lines: List[str] = [
+            "std::vector<seastar::sstring> ClickHouseNativeStorage::getMigrations() {",
+            "\treturn {",
+        ]
+        for f in valid_funcs:
+            event_name = GoCodeGen.get_event_name(f['params'][0])
+            data_params = f['params'][1:]
+            cols: List[str] = []
+            selects: List[str] = []
+            for param_name, param_type in data_params:
+                field_name = self.get_field_name(param_name)
+                ch_type = self.get_clickhouse_column_type(param_type)
+                cols.append(f"{field_name} {ch_type}")
+                extract_fn = self.get_json_extract_fn(ch_type)
+                selects.append(f"{extract_fn}(payload, '{field_name}') AS {field_name}")
+            cols_str = ", ".join(cols)
+            selects_str = ", ".join(selects)
+
+            native_migrations_lines.append(
+                f'\t\tfmt::format("CREATE TABLE IF NOT EXISTS {{}}_{event_name} ({cols_str}) ENGINE = MergeTree() ORDER BY tuple()", _table),'
+            )
+            native_migrations_lines.append(
+                f'\t\tfmt::format("CREATE MATERIALIZED VIEW IF NOT EXISTS mv_{{}}_{event_name} TO {{}}_{event_name} AS SELECT {selects_str} FROM {{}} WHERE event = {{}}", '
+                f'_table, _table, _table, Events::{event_name}),'
+            )
+        native_migrations_lines.append("\t};")
+        native_migrations_lines.append("}")
+
+        self._clickhouse_native_definitions_code = "\n".join(native_flush_lines) + "\n\n" + "\n".join(native_migrations_lines) + "\n"
+
     def get_storage_enum_code(self):
         return self._storage_enum_code
 
@@ -556,3 +638,6 @@ class SeastarServerCodeGen(CodeGen):
 
     def get_clickhouse_definitions_code(self):
         return self._clickhouse_definitions_code
+
+    def get_clickhouse_native_definitions_code(self):
+        return self._clickhouse_native_definitions_code

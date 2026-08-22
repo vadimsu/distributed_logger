@@ -124,7 +124,12 @@ namespace DistributedLogger {
 					_dataRetentionPeriod = to_string(*it);
 					_dataRetentionPeriod = _dataRetentionPeriod.substr(1, _dataRetentionPeriod.size() - 2);
 				}
-				fmt::print("StorageConfig type {} Username {} Password {} Host {} Port {} Dbname {} DataRetentionPeriod {}\n",_storageType,_username,_password,_host,_port,_dbname,_dataRetentionPeriod);
+				it = jsonPayload.find("Protocol");
+				if (it != jsonPayload.end()){
+					_protocol = to_string(*it);
+					_protocol = _protocol.substr(1, _protocol.size() - 2);
+				}
+				fmt::print("StorageConfig type {} Username {} Password {} Host {} Port {} Dbname {} DataRetentionPeriod {} Protocol {}\n",_storageType,_username,_password,_host,_port,_dbname,_dataRetentionPeriod,_protocol);
 			}
 			const seastar::sstring& getStorageType() const { return _storageType; }
 			const seastar::sstring& getUsername() const { return _username; }
@@ -133,6 +138,8 @@ namespace DistributedLogger {
 			const seastar::sstring& getPort() const { return _port; }
 			const seastar::sstring& getDbname() const { return _dbname; }
 			const seastar::sstring& getDataRetentionPeriod() const { return _dataRetentionPeriod; }
+			// "http" (default) or "native"; selects ClickHouseStorage vs ClickHouseNativeStorage.
+			const seastar::sstring& getProtocol() const { return _protocol; }
 		private:
 			seastar::sstring _storageType;
 			seastar::sstring  _username;
@@ -141,6 +148,7 @@ namespace DistributedLogger {
 			seastar::sstring _port;
 			seastar::sstring _dbname;
 			seastar::sstring _dataRetentionPeriod;
+			seastar::sstring _protocol;
 	};
 	class GeneralConfig : public ConfigReader {
 		public:

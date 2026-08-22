@@ -2,12 +2,13 @@
 
 #include "storage.hh"
 #include "clickhouse.hh"
+#include "clickhouse_native.hh"
 
 namespace DistributedLogger {
 
 
-std::tuple<seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring> getParams(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
-	std::tuple<seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring> ret;
+std::tuple<seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring> getParams(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
+	std::tuple<seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstring> ret;
 	auto it = params.find("StorageType");
 	if (it == params.end()){
 		fmt::print("Cannot find StorageType\n");
@@ -40,6 +41,10 @@ std::tuple<seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstrin
 		if (it != params.end()){
 			std::get<4>(ret) = it->second;
 		}
+		// "http" (default, ClickHouseStorage) or "native" (ClickHouseNativeStorage) -
+		// see docs/storage.md.
+		it = params.find("Protocol");
+		std::get<5>(ret) = (it != params.end() && !it->second.empty()) ? it->second : seastar::sstring("http");
 	}else{
 		fmt::print("unknown storage {} \n", it->second);
 	}
@@ -49,12 +54,19 @@ std::tuple<seastar::sstring, seastar::sstring, seastar::sstring, seastar::sstrin
 
 std::shared_ptr<Storage> Storage::Init(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
 	auto par = getParams(params);
+	if (std::get<5>(par) == "native"){
+		return ClickHouseNativeStorage::Init(std::get<0>(par), std::get<1>(par), std::get<2>(par), std::get<3>(par), std::get<4>(par));
+	}
 	return ClickHouseStorage::Init(std::get<0>(par), std::get<1>(par), std::get<2>(par), std::get<3>(par), std::get<4>(par));
 }
 
 seastar::future<> Storage::globalInit(const std::unordered_map<seastar::sstring, seastar::sstring>& params){
 	auto par = getParams(params);
+	if (std::get<5>(par) == "native"){
+		return ClickHouseNativeStorage::globalInit(std::get<0>(par), std::get<1>(par), std::get<2>(par), std::get<3>(par), std::get<4>(par));
+	}
 	return ClickHouseStorage::globalInit(std::get<0>(par), std::get<1>(par), std::get<2>(par), std::get<3>(par), std::get<4>(par));
 }
 
 }
+

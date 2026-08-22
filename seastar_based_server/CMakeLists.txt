@@ -38,3 +38,21 @@ set(CMAKE_CXX_FLAGS "-O3")
 set_target_properties(seastar_server
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+# Standalone integration test exercising ClickHouseNativeConnection /
+# ClickHouseNativeStorage against a live ClickHouse server over the native
+# TCP protocol. Not run automatically as part of the main build; invoke
+# bin/native_protocol_test directly (needs a reachable ClickHouse instance).
+add_executable (
+	native_protocol_test
+	tests/native_protocol_test.cc
+)
+target_link_libraries (
+	native_protocol_test
+	PRIVATE Seastar::seastar
+	crypto
+	ssl
+)
+set_target_properties(native_protocol_test
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
