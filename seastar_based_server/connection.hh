@@ -25,6 +25,9 @@ namespace DistributedLogger{
 				co_return seastar::temporary_buffer<char>();
 			}
 			bool isAlive() { return !_in.eof(); }
+			void setRxBufferSize(int size){
+				_fd.set_sockopt(SOL_SOCKET, SO_RCVBUF, (const void*) &size, sizeof(size));
+			}
 		private:
 			seastar::connected_socket _fd;
 			seastar::socket_address _addr;

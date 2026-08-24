@@ -30,6 +30,19 @@ namespace {
 
 int g_failures = 0;
 
+DistributedLogger::ClickHouseNative::ColumnBatch makeColumnBatch(
+		const std::vector<std::pair<uint64_t, seastar::sstring>>& rows) {
+	DistributedLogger::ClickHouseNative::ColumnBatch batch;
+	batch.events.reserve(rows.size());
+	batch.payloads.reserve(rows.size());
+	for (const auto& row : rows) {
+		batch.events.push_back(row.first);
+		batch.total_payload_bytes += row.second.size();
+		batch.payloads.push_back(row.second);
+	}
+	return batch;
+}
+
 void check(bool cond, const char* what) {
 	if (cond) {
 		fmt::print("[PASS] {}\n", what);
@@ -97,7 +110,7 @@ seastar::future<> testLowLevelConnection(seastar::sstring host, seastar::sstring
 	rows.emplace_back(1, seastar::sstring("{\"a\":1}"));
 	rows.emplace_back(2, seastar::sstring("{\"a\":2}"));
 	rows.emplace_back(1, seastar::sstring("{\"a\":3}"));
-	co_await conn->insertRows("native_protocol_test.raw", rows);
+	co_await conn->insertRows("native_protocol_test.raw", makeColumnBatch(rows));
 	check(true, "insertRows() completed without throwing");
 
 	std::vector<std::vector<seastar::sstring>> outRows;
@@ -117,7 +130,7 @@ seastar::future<> testLowLevelConnection(seastar::sstring host, seastar::sstring
 	// to isolate whether connection reuse across multiple inserts corrupts data.
 	std::vector<std::pair<uint64_t, seastar::sstring>> rows2;
 	rows2.emplace_back(9, seastar::sstring("{\"b\":9}"));
-	co_await conn->insertRows("native_protocol_test.raw", rows2);
+	co_await conn->insertRows("native_protocol_test.raw", makeColumnBatch(rows2));
 	outRows.clear();
 	co_await conn->executeQuery("SELECT count() FROM native_protocol_test.raw", &outRows);
 	check(outRows.size() == 1 && outRows[0][0] == seastar::sstring("4"),

@@ -21,8 +21,10 @@ def test_seastar_codegen_generates_native_flush_and_migrations():
     # decoded batches into insertRows() (native Block-based bulk insert),
     # rather than building a text VALUES clause like the HTTP backend does.
     assert 'ClickHouseNativeStorage::Flush' in native_code
-    assert 'insertRows(std::move(kv.second))' in native_code
-    assert 'std::map<int, std::vector<std::pair<uint64_t, seastar::sstring>>>' in native_code
+    assert 'insertRows(std::move(cb))' in native_code
+    assert 'std::array<ClickHouseNative::ColumnBatch, 1>' in native_code
+    assert 'std::map' not in native_code
+    assert 'nlohmann::json' not in native_code
     assert 'case Events::event0' in native_code
     assert 'INSERT INTO' not in native_code  # no text VALUES clause
 
@@ -56,4 +58,5 @@ def test_seastar_codegen_empty_funcs_produces_empty_native_bodies():
     native_code = g.get_clickhouse_native_definitions_code()
     assert 'ClickHouseNativeStorage::Flush' in native_code
     assert 'ClickHouseNativeStorage::getMigrations' in native_code
+    assert 'std::array<ClickHouseNative::ColumnBatch, 0>' in native_code
     assert 'case Events::' not in native_code

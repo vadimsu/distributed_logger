@@ -18,6 +18,7 @@ namespace DistributedLogger{
 			seastar::future<> onAccepted(seastar::lw_shared_ptr<Connection> connection){
 				_connection = connection;
 				_storage = Storage::Init(_storageParams);
+				_connection->setRxBufferSize(4096*4096);
 				auto it = _storageParams.find("WorkersBufferSize");
 				if (it != _storageParams.end()){
 					_batchSize = atoi(it->second.c_str());

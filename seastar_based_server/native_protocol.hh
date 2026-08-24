@@ -32,7 +32,9 @@
 #include <seastar/net/api.hh>
 #include <seastar/net/socket_defs.hh>
 
+#include <array>
 #include <cstdint>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <stdexcept>
@@ -112,6 +114,52 @@ inline void putInt32(std::string& out, int32_t v) {
 	}
 }
 
+// Number of bytes putVarUInt() would write for `value` - used to compute the
+// exact wire size of a Block up front so the output buffer can be reserve()'d
+// once instead of growing/reallocating as fields are appended.
+inline size_t varUIntSize(uint64_t value) {
+	size_t n = 1;
+	while (value >>= 7) {
+		++n;
+	}
+	return n;
+}
+
+// Appends `s` to `out` with JSON string escaping (quotes/backslashes/control
+// characters). Lets generated Flush() code build payload JSON directly into
+// a reused buffer instead of going through nlohmann::json's DOM/serializer.
+inline void appendJsonEscapedString(std::string& out, const seastar::sstring& s) {
+	for (size_t i = 0; i < s.size(); ++i) {
+		unsigned char c = static_cast<unsigned char>(s[i]);
+		switch (c) {
+			case '"': out += "\\\""; break;
+			case '\\': out += "\\\\"; break;
+			case '\n': out += "\\n"; break;
+			case '\r': out += "\\r"; break;
+			case '\t': out += "\\t"; break;
+			default:
+				if (c < 0x20) {
+					char buf[7];
+					std::snprintf(buf, sizeof(buf), "\\u%04x", c);
+					out += buf;
+				} else {
+					out.push_back(static_cast<char>(c));
+				}
+		}
+	}
+}
+
+// Columnar (event id, JSON payload) batch for one event type, built once per
+// Flush() call and encoded directly into a single Block by insertRows() -
+// avoids the per-row std::pair/std::map churn the naive approach needs.
+struct ColumnBatch {
+	std::vector<uint64_t> events;
+	std::vector<seastar::sstring> payloads;
+	size_t total_payload_bytes = 0;
+
+	bool empty() const { return events.empty(); }
+};
+
 // A single ClickHouse-native connection. Not safe for concurrent use: the
 // protocol is stateful and processes one query at a time, so callers must
 // await each execute/insert call before issuing the next one (the same
@@ -166,7 +214,7 @@ public:
 	// drain metadata until the schema block, send one Data block with the
 	// rows, then the empty end-of-input marker.
 	//
-	// NOTE: table/rows are taken BY VALUE (not by reference) deliberately.
+	// NOTE: table/batch are taken BY VALUE (not by reference) deliberately.
 	// This is a coroutine - a reference parameter would only extend the
 	// referred-to object's lifetime if the *caller* keeps it alive across
 	// every co_await here. Callers that invoke this from inside a `.then()`
@@ -176,12 +224,14 @@ public:
 	// future, which is long before the coroutine itself finishes running.
 	// Taking these by value copies/moves the data into this coroutine's own
 	// frame at the call site, so it stays valid for the whole call.
-	seastar::future<> insertRows(seastar::sstring table, std::vector<std::pair<uint64_t, seastar::sstring>> rows) {
-		if (rows.empty()) {
+	seastar::future<> insertRows(seastar::sstring table, ColumnBatch batch) {
+		if (batch.empty()) {
 			co_return;
 		}
+		std::string queryText = "INSERT INTO " + table + " (event, payload) VALUES";
 		std::string queryBuf;
-		appendQueryPacket(queryBuf, nextQueryId(), "INSERT INTO " + table + " (event, payload) VALUES");
+		queryBuf.reserve(queryText.size() + 32);
+		appendQueryPacket(queryBuf, nextQueryId(), queryText);
 		appendEmptyDataMarker(queryBuf);
 		co_await _out.write(queryBuf);
 		co_await _out.flush();
@@ -200,25 +250,48 @@ public:
 			co_await handleMetadataPacket(packetType);
 		}
 
+		const size_t numRows = batch.events.size();
+
+		// Compute the exact encoded size up front (mirrors appendDefaultBlockInfo's
+		// fixed 8-byte shape: two 1-byte field markers + 1-byte is_overflows +
+		// 4-byte bucket_number + 1-byte terminator) so dataBuf is allocated once,
+		// instead of growing/reallocating repeatedly as fields are appended below.
+		size_t expectedSize = varUIntSize(static_cast<uint64_t>(ClientPacket::Data));
+		expectedSize += varUIntSize(0); // empty block-name string
+		expectedSize += 8; // appendDefaultBlockInfo()
+		expectedSize += varUIntSize(2); // num_columns
+		expectedSize += varUIntSize(numRows);
+		expectedSize += varUIntSize(5) + 5; // "event"
+		expectedSize += varUIntSize(6) + 6; // "UInt64"
+		expectedSize += numRows * sizeof(uint64_t);
+		expectedSize += varUIntSize(7) + 7; // "payload"
+		expectedSize += varUIntSize(6) + 6; // "String"
+		expectedSize += batch.total_payload_bytes;
+		for (const auto& payload : batch.payloads) {
+			expectedSize += varUIntSize(payload.size());
+		}
+
 		std::string dataBuf;
+		dataBuf.reserve(expectedSize);
 		putVarUInt(dataBuf, static_cast<uint64_t>(ClientPacket::Data));
 		putString(dataBuf, seastar::sstring());
 		appendDefaultBlockInfo(dataBuf);
 		putVarUInt(dataBuf, 2); // num_columns
-		putVarUInt(dataBuf, rows.size()); // num_rows
+		putVarUInt(dataBuf, numRows);
 		putString(dataBuf, seastar::sstring("event"));
 		putString(dataBuf, seastar::sstring("UInt64"));
-		for (auto& row : rows) {
-			putUInt64(dataBuf, row.first);
+		for (uint64_t ev : batch.events) {
+			putUInt64(dataBuf, ev);
 		}
 		putString(dataBuf, seastar::sstring("payload"));
 		putString(dataBuf, seastar::sstring("String"));
-		for (auto& row : rows) {
-			putString(dataBuf, row.second);
+		for (const auto& payload : batch.payloads) {
+			putString(dataBuf, payload);
 		}
 		co_await _out.write(dataBuf);
 
 		std::string endBuf;
+		endBuf.reserve(16);
 		appendEmptyDataMarker(endBuf);
 		co_await _out.write(endBuf);
 		co_await _out.flush();

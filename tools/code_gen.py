@@ -400,6 +400,33 @@ class SeastarServerCodeGen(CodeGen):
             "Bool": "JSONExtractBool",
         }.get(ch_column_type, "JSONExtractString")
 
+    @staticmethod
+    def _json_payload_reserve_expr(data_params):
+        """C++ expression estimating the JSON payload size for one row, used to
+        reserve() the payload buffer once instead of growing it field-by-field.
+        Field/key literal lengths are known at codegen time; only string field
+        contents are runtime-sized, so those contribute a `decoded.<field>.size()`
+        term and everything else (braces, quotes, colons, commas, key text, a
+        worst-case-width numeric/bool literal) is folded into a constant."""
+        fixed = 2  # surrounding { }
+        dynamic_terms: List[str] = []
+        for idx, (param_name, param_type) in enumerate(data_params):
+            field_name = SeastarServerCodeGen.get_field_name(param_name)
+            fixed += 2 + 1 + len(field_name)  # "<key>":
+            if idx != 0:
+                fixed += 1  # comma separator
+            if param_type == "string":
+                fixed += 2  # quotes around the value
+                dynamic_terms.append(f"decoded.{param_name}.size()")
+            elif param_type == "bool":
+                fixed += 5  # "false"
+            else:
+                fixed += 20  # up to 20 digits for a 64-bit integer
+        expr = str(fixed)
+        for term in dynamic_terms:
+            expr += " + " + term
+        return expr
+
     def generate_code(self):
         valid_funcs = [f for f in self._func_dict if len(f.get('params', [])) >= 1]
 
@@ -547,15 +574,24 @@ class SeastarServerCodeGen(CodeGen):
         self._clickhouse_definitions_code = "\n".join(flush_lines) + "\n\n" + "\n".join(migrations_lines) + "\n"
 
         # ClickHouseNativeStorage::Flush() + getMigrations() generation (native TCP
-        # protocol client, per-event-type batches). Same decode/dispatch shape as the
-        # HTTP version above, but instead of building a formatted VALUES-clause string
-        # it accumulates (event id, JSON payload) pairs and hands them to insertRows(),
-        # which encodes them as a native-protocol Block. getMigrations() runs the same
-        # DDL as the HTTP backend (materialized views populate the typed tables either way).
+        # protocol client, per-event-type batches). Events map onto a fixed-size
+        # std::array<ColumnBatch, N> (N = number of event types, indexed directly
+        # by the Events enum value) instead of a std::map, and each row's JSON
+        # payload is built by appending straight into a reused std::string rather
+        # than through nlohmann::json's DOM/serializer - both changes avoid
+        # allocation/copy overhead that showed up under real batch sizes.
+        # getMigrations() runs the same DDL as the HTTP backend (materialized
+        # views populate the typed tables either way).
+        num_events = len(valid_funcs)
+        batches_type = f"std::array<ClickHouseNative::ColumnBatch, {num_events}>"
         native_flush_lines: List[str] = [
             "seastar::future<> ClickHouseNativeStorage::Flush(std::vector<seastar::temporary_buffer<char>>&& batch) {",
-            "\treturn seastar::do_with(std::move(batch), std::map<int, std::vector<std::pair<uint64_t, seastar::sstring>>>{},",
-            "\t\t\t[this] (std::vector<seastar::temporary_buffer<char>>& batch, std::map<int, std::vector<std::pair<uint64_t, seastar::sstring>>>& rows_by_event) {",
+            f"\treturn seastar::do_with(std::move(batch), {batches_type}{{}},",
+            f"\t\t\t[this] (std::vector<seastar::temporary_buffer<char>>& batch, {batches_type}& batches) {{",
+            "\t\tfor (auto& cb : batches) {",
+            "\t\t\tcb.events.reserve(batch.size());",
+            "\t\t\tcb.payloads.reserve(batch.size());",
+            "\t\t}",
             "\t\tfor (auto& packet : batch) {",
             "\t\t\tauto event_and_rc = DecodeUint64(packet);",
             "\t\t\tif (std::get<1>(event_and_rc) == -1) {",
@@ -573,26 +609,49 @@ class SeastarServerCodeGen(CodeGen):
             native_flush_lines.append("\t\t\t\t\tif (rc == -1) {")
             native_flush_lines.append("\t\t\t\t\t\tcontinue;")
             native_flush_lines.append("\t\t\t\t\t}")
-            native_flush_lines.append("\t\t\t\t\tnlohmann::json row;")
-            for param_name, param_type in data_params:
+            native_flush_lines.append("\t\t\t\t\tstd::string payloadBuf;")
+            native_flush_lines.append(
+                f"\t\t\t\t\tpayloadBuf.reserve({self._json_payload_reserve_expr(data_params)});"
+            )
+            native_flush_lines.append("\t\t\t\t\tpayloadBuf.push_back('{');")
+            for idx, (param_name, param_type) in enumerate(data_params):
                 field_name = self.get_field_name(param_name)
+                # Pre-escaped for embedding inside a C++ string literal below,
+                # e.g. `,\"Host\":` - NOT raw quotes, which would prematurely
+                # close the literal.
+                key_literal = ("," if idx != 0 else "") + f'\\"{field_name}\\":'
                 if param_type == "string":
+                    native_flush_lines.append(f'\t\t\t\t\tpayloadBuf += "{key_literal}\\"";')
                     native_flush_lines.append(
-                        f'\t\t\t\t\trow["{field_name}"] = std::string(decoded.{param_name}.c_str(), decoded.{param_name}.size());'
+                        f"\t\t\t\t\tClickHouseNative::appendJsonEscapedString(payloadBuf, decoded.{param_name});"
+                    )
+                    native_flush_lines.append("\t\t\t\t\tpayloadBuf.push_back('\"');")
+                elif param_type == "bool":
+                    native_flush_lines.append(f'\t\t\t\t\tpayloadBuf += "{key_literal}";')
+                    native_flush_lines.append(
+                        f'\t\t\t\t\tpayloadBuf += decoded.{param_name} ? "true" : "false";'
                     )
                 else:
-                    native_flush_lines.append(f'\t\t\t\t\trow["{field_name}"] = decoded.{param_name};')
-            native_flush_lines.append(
-                f'\t\t\t\t\trows_by_event[Events::{event_name}].emplace_back((uint64_t)Events::{event_name}, seastar::sstring(row.dump()));'
-            )
+                    native_flush_lines.append(f'\t\t\t\t\tpayloadBuf += "{key_literal}";')
+                    native_flush_lines.append(f"\t\t\t\t\tpayloadBuf += std::to_string(decoded.{param_name});")
+            native_flush_lines.append("\t\t\t\t\tpayloadBuf.push_back('}');")
+            native_flush_lines.append(f"\t\t\t\t\tauto& cb = batches[Events::{event_name}];")
+            native_flush_lines.append(f"\t\t\t\t\tcb.events.push_back((uint64_t)Events::{event_name});")
+            native_flush_lines.append("\t\t\t\t\tcb.total_payload_bytes += payloadBuf.size();")
+            native_flush_lines.append("\t\t\t\t\tcb.payloads.emplace_back(payloadBuf.data(), payloadBuf.size());")
             native_flush_lines.append("\t\t\t\t\tbreak;")
             native_flush_lines.append("\t\t\t\t}")
         native_flush_lines.append("\t\t\t\tdefault:")
         native_flush_lines.append("\t\t\t\t\tbreak;")
         native_flush_lines.append("\t\t\t}")
         native_flush_lines.append("\t\t}")
-        native_flush_lines.append("\t\treturn seastar::do_for_each(rows_by_event.begin(), rows_by_event.end(), [this] (auto& kv) {")
-        native_flush_lines.append("\t\t\treturn insertRows(std::move(kv.second));")
+        native_flush_lines.append(
+            "\t\treturn seastar::do_for_each(batches.begin(), batches.end(), [this] (ClickHouseNative::ColumnBatch& cb) {"
+        )
+        native_flush_lines.append("\t\t\tif (cb.empty()) {")
+        native_flush_lines.append("\t\t\t\treturn seastar::make_ready_future<>();")
+        native_flush_lines.append("\t\t\t}")
+        native_flush_lines.append("\t\t\treturn insertRows(std::move(cb));")
         native_flush_lines.append("\t\t});")
         native_flush_lines.append("\t});")
         native_flush_lines.append("}")

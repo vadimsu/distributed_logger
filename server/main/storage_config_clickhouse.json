@@ -1,9 +1,9 @@
 {
 	"StorageType":"clickhouse",
-        "Username":"",
-        "Password":"",
-        "Host":"172.20.0.2",
+        "Username":"default",
+        "Password":"default",
+        "Host":"127.0.0.1",
         "Port":"9000",
-        "Dbname":"default",
+        "Dbname":"events",
         "DataRetentionPeriod":"3"
 }

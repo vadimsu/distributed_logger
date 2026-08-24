@@ -4,12 +4,11 @@
 #include <seastar/core/shared_ptr.hh>
 #include <seastar/core/sstring.hh>
 #include <seastar/core/temporary_buffer.hh>
-#include "nlohmann/json.hpp"
 #include "../storage.hh"
 #include "../../../seastar_based_server/storage.hh"
 #include "../../../seastar_based_server/native_protocol.hh"
 #include "../../event_decoder/event_decoder.hh"
-#include <map>
+#include <array>
 #include <memory>
 #include <string>
 #include <utility>
@@ -92,11 +91,13 @@ public:
 		});
 	}
 
-	// Bulk-inserts (event, payload) rows into `_table` via the native
-	// protocol's INSERT phase (Block-encoded, not text VALUES).
-	seastar::future<> insertRows(std::vector<std::pair<uint64_t, seastar::sstring>> rows) {
-		return ensureConnected().then([this, rows = std::move(rows)] () mutable {
-			return _conn->insertRows(_table, rows);
+	// Bulk-inserts a columnar (event, payload) batch for one event type into
+	// `_table` via the native protocol's INSERT phase (Block-encoded, not text
+	// VALUES). `batch` is moved so its vectors are handed straight to the
+	// connection without an extra copy.
+	seastar::future<> insertRows(ClickHouseNative::ColumnBatch batch) {
+		return ensureConnected().then([this, batch = std::move(batch)] () mutable {
+			return _conn->insertRows(_table, std::move(batch));
 		}).handle_exception([this](std::exception_ptr ep) {
 			fmt::print("{} {} ClickHouse native insert into {} failed: {}\n", __FILE__, __LINE__, _table, ep);
 			return seastar::make_ready_future<>();
