@@ -2,5 +2,5 @@
 	"StorageConfigFileName":"storage_config_clickhouse.json",
         "EventCollectorFileName":"event_collector.json",
 	"NumberOfWorkers": 10,
-	"WorkersBufferSize":10000
+	"WorkersBufferSize":1000000
 }

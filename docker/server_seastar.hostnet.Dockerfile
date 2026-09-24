@@ -3,7 +3,7 @@ FROM ubuntu:24.04
 
 ENV TZ=Etc/UTC
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-RUN apt-get update && apt-get install -y tzdata git python3 python3-pip python3-venv liburing-dev
+RUN apt-get update && apt-get install -y tzdata git python3 python3-pip python3-venv
 
 # Create venv
 RUN python3 -m venv /opt/venv
@@ -49,8 +49,8 @@ WORKDIR /distributed_logger
 
 # Copy config
 COPY examples/clickhouse_pipeline/general_config_seastar.json seastar_based_server/bin/general_config.json
-COPY examples/clickhouse_pipeline/storage_config_clickhouse_seastar.json seastar_based_server/bin/storage_config_clickhouse.json
-COPY examples/clickhouse_pipeline/event_collector_seastar.json seastar_based_server/bin/event_collector.json
+COPY examples/clickhouse_pipeline/storage_config_clickhouse_seastar.hostnet.json seastar_based_server/bin/storage_config_clickhouse.json
+COPY examples/clickhouse_pipeline/event_collector_seastar.hostnet.json seastar_based_server/bin/event_collector.json
 
 COPY examples/clickhouse_pipeline/run_server_seastar.sh seastar_based_server/bin/run_server_seastar.sh
 

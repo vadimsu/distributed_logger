@@ -83,9 +83,9 @@ public:
 	seastar::future<> execute(seastar::sstring query, bool debug = false) {
 		return ensureConnected().then([this, query]{
 			return _conn->executeQuery(query);
-		}).handle_exception([query, debug](std::exception_ptr ep) {
+		}).handle_exception([query, debug, this](std::exception_ptr ep) {
 			if (debug) {
-				fmt::print("{} {} ClickHouse native query failed: {} query {}\n", __FILE__, __LINE__, ep, query);
+				fmt::print("{} {} ClickHouse native query failed: {} query {} ip {} port {} dbname {} username {} passwd {}\n", __FILE__, __LINE__, ep, query,_ip,_port,_dbname,_username,_password);
 			}
 			return seastar::make_ready_future<>();
 		});

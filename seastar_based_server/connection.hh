@@ -28,6 +28,9 @@ namespace DistributedLogger{
 			void setRxBufferSize(int size){
 				_fd.set_sockopt(SOL_SOCKET, SO_RCVBUF, (const void*) &size, sizeof(size));
 			}
+			void setTxBufferSize(int size){
+				_fd.set_sockopt(SOL_SOCKET, SO_SNDBUF, (const void*) &size, sizeof(size));
+			}
 		private:
 			seastar::connected_socket _fd;
 			seastar::socket_address _addr;

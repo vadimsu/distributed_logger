@@ -2,9 +2,8 @@
 	"StorageType":"clickhouse",
         "Username":"default",
         "Password":"default",
-	"Host":"172.20.0.3",
+        "Host":"127.0.0.1",
         "Port":"9000",
         "Dbname":"default",
-        "DataRetentionPeriod":"3",
-	"Protocol":"native"
+        "DataRetentionPeriod":"3"
 }

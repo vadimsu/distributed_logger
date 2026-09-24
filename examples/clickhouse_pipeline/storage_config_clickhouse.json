@@ -1,7 +1,7 @@
 {
 	"StorageType":"clickhouse",
-        "Username":"",
-        "Password":"",
+        "Username":"default",
+        "Password":"default",
         "Host":"docker-clickhouse-1",
         "Port":"9000",
         "Dbname":"default",

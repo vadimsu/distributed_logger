@@ -9,8 +9,9 @@ git submodule update --init --recursive
 echo "Installing Seastar dependencies"
 ./install-dependencies.sh
 echo "Configuring Seastar"
-./configure.py --mode=release --without-demos --without-apps --without-tests
+./configure.py --mode=release --without-demos --without-apps --without-tests --enable-io_uring
 echo "Building Seastar"
 ninja -C build/release
+#-DSeastar_IO_URING=ON
 echo "Installing Seastar"
 ninja -C build/release install

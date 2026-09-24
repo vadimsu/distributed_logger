@@ -33,6 +33,8 @@ target_link_libraries (
 	boost_program_options
 )
 
+set(CMAKE_CXX_FLAGS "-O3")
+
 set_target_properties(async_logging
         PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")

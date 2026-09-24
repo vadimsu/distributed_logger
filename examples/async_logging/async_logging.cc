@@ -41,15 +41,18 @@ void *run_loop(void *arg){
 		return NULL;
 	}
 	uint64_t start_ts = time(NULL);
-	uint64_t last_log_ts = time(NULL);
-	while(time(NULL) - start_ts < loop_params->time_to_run_sec){
-		auto nfds = epoll_wait(epollfd, events, MAX_EVENTS, -1);
+	while(true){
+		auto timediff = time(NULL) - start_ts;
+		if (timediff > loop_params->time_to_run_sec){
+			break;
+		}
+		auto nfds = epoll_wait(epollfd, events, MAX_EVENTS, 0);
 		for (int n = 0; n < nfds; ++n) {
 			if (events[n].data.fd == eventPosix->getFd()){
 				distributedLogger->LogEvent_event0(loop_params->shard, host);
 				distributedLogger->LogEvent_event1(loop_params->shard, host, time(NULL));
 				eventPosix->onWriteOpportunity();
-			}	
+			}
 		}
 	}
 	eventPosix->connectionGracefulShutdown();
@@ -90,7 +93,7 @@ int main(int argc, char **argv){
 		logs_submitted_total += get<1>(t)->logs_submitted;
 		logs_dropped_total += get<1>(t)->logs_dropped;
 		logs_sent_total += get<1>(t)->logs_sent;
-		cout<<"core "<<core<<" posted "<<get<1>(t)->logs_submitted<<" dropped "<<get<1>(t)->logs_dropped<<" sent "<<get<1>(t)->logs_sent<<endl;
+		cout<<"core "<<std::get<1>(t)->shard<<" posted "<<get<1>(t)->logs_submitted<<" dropped "<<get<1>(t)->logs_dropped<<" sent "<<get<1>(t)->logs_sent<<endl;
 	}
 	auto end_ts = time(NULL);
 	cout<<"logs posted "<<logs_submitted_total<<" dropped "<<logs_dropped_total<<endl;

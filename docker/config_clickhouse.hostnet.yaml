@@ -6,14 +6,15 @@ services:
     image: clickhouse/clickhouse-server:latest
     volumes: [./listen.xml:/etc/clickhouse-server/config.d/listen.xml,
 ./users.xml:/etc/clickhouse-server/users.d/default-user.xml]
+    network_mode: "host"
     environment:
       - CLICKHOUSE_SKIP_USER_SETUP=1
-    cpuset: "0-3"
-    networks:
-      app_net:
-        ipv4_address: 172.20.0.3
+          #    networks:
+          #      app_net:
+          #        ipv4_address: 172.20.0.3
     ports:
       - "9000:9000"
+    cpuset: "0-8"
     healthcheck:
       test: ["CMD", "clickhouse-client", "-u", "default", "--password", "default", "--query", "SELECT 1"]
       interval: 2s
@@ -27,12 +28,13 @@ services:
     depends_on:
       clickhouse:
         condition: service_healthy
-    cpuset: "4-5"
+    network_mode: "host"
     ports:
       - "7777:7777"
-    networks:
-      app_net:
-        ipv4_address: 172.20.0.4
+        #    networks:
+        #      app_net:
+        #        ipv4_address: 172.20.0.4
+    cpuset: "9-13"
     healthcheck:
       test: ["CMD-SHELL", "pgrep -x distr_logger > /dev/null"]
       interval: 10s
@@ -44,13 +46,14 @@ services:
     build:
       context: ..
       dockerfile: ./docker/client.Dockerfile
+    network_mode: "host"
     depends_on:
       server:
         condition: service_healthy
-    cpuset: "6-21"
-    networks:
-      app_net:
-        ipv4_address: 172.20.0.5
+          #    networks:
+          #      app_net:
+          #        ipv4_address: 172.20.0.5
+    cpuset: "14-21"
 
 networks:
   app_net:
